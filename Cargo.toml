@@ -1,0 +1,17 @@
+[package]
+name = "mdbook-typst"
+version = "0.1.0"
+edition = "2021"
+authors = ["duskmoon (Campbell He) <kp.campbell.he@duskmoon314.com>"]
+description = "mdbook preprocessor to add typst support"
+license = "MIT"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = { version = "4.4.10", features = ["derive"] }
+mdbook = "0.4.36"
+pulldown-cmark = "0.9.3"
+semver = "1.0.20"
+serde_json = "1.0.108"
+tempfile = "3.8.1"
