@@ -1,0 +1,11 @@
+[book]
+authors = []
+language = "en"
+multilingual = false
+src = "src"
+
+[preprocessor.typst]
+command = "./target/release/mdbook-typst"
+
+[output.html]
+additional-css = ["css/typst.css"]

@@ -1,15 +1,44 @@
+use anyhow::anyhow;
 use mdbook::book::{Book, Chapter};
 use mdbook::errors::Result;
 use mdbook::preprocess::{Preprocessor, PreprocessorContext};
 use mdbook::BookItem;
-use pulldown_cmark::{CodeBlockKind::*, Event, Options, Parser, Tag};
-use std::io::Write;
-use std::process::Command;
-use tempfile::NamedTempFile;
+use pulldown_cmark::{Event, Options, Parser};
 
-pub struct Typst;
+mod compiler;
+use compiler::Compiler;
+use typst::foundations::Bytes;
+use typst::text::Font;
 
-impl Preprocessor for Typst {
+pub struct TypstProcessor {
+    compiler: Compiler,
+}
+
+impl TypstProcessor {
+    pub fn new() -> Self {
+        // Read the default font dir
+        // TODO: handle all OSes
+        let fonts = glob::glob("/usr/share/fonts/**/*.ttf")
+            .unwrap()
+            .map(Result::unwrap)
+            .flat_map(|path| {
+                let bytes = std::fs::read(&path).unwrap();
+                let buffer = Bytes::from(bytes);
+                let face_count = ttf_parser::fonts_in_collection(&buffer).unwrap_or(1);
+                (0..face_count).map(move |face| {
+                    Font::new(buffer.clone(), face)
+                        .unwrap_or_else(|| panic!("Failed to load font {:?} face {}", path, face))
+                })
+            })
+            .collect();
+
+        Self {
+            compiler: Compiler::new(fonts),
+        }
+    }
+}
+
+impl Preprocessor for TypstProcessor {
     fn name(&self) -> &str {
         "typst"
     }
@@ -40,91 +69,61 @@ impl Preprocessor for Typst {
     }
 }
 
-impl Typst {
+impl TypstProcessor {
     fn convert_typst(&self, chapter: &mut Chapter) -> Result<String> {
         let mut typst_blocks = Vec::new();
 
-        let mut typst_content = String::new();
-        let mut in_typst_block = false;
-        let mut new_code_span_start = true;
-        let mut code_span = 0..0;
+        // let mut typst_content = String::new();
+        // let mut in_typst_block = false;
+        // let mut new_code_span_start = true;
+        // let mut code_span = 0..0;
 
         let mut opts = Options::empty();
         opts.insert(Options::ENABLE_TABLES);
         opts.insert(Options::ENABLE_FOOTNOTES);
         opts.insert(Options::ENABLE_STRIKETHROUGH);
         opts.insert(Options::ENABLE_TASKLISTS);
+        opts.insert(Options::ENABLE_MATH);
 
         let parser = Parser::new_ext(&chapter.content, opts);
         for (e, span) in parser.into_offset_iter() {
-            if let Event::Start(Tag::CodeBlock(Fenced(code))) = e.clone() {
-                if &*code == "typst" {
-                    in_typst_block = true;
-                    typst_content.clear();
-                }
-                continue;
-            }
-
-            if !in_typst_block {
-                continue;
-            }
-
-            // Get text
-            if let Event::Text(_) = e {
-                if new_code_span_start {
-                    code_span = span;
-                    new_code_span_start = false;
-                } else {
-                    code_span.end = span.end;
-                }
-
-                continue;
-            }
-
-            if let Event::End(Tag::CodeBlock(Fenced(code))) = e {
-                assert_eq!(&*code, "typst");
-                in_typst_block = false;
-
-                let typst_content = &chapter.content[code_span.clone()];
-                // let typst_content = format!(
-                //     "#set page(width:auto, height:auto, margin:1em)\n{}",
-                //     typst_content
-                // );
-                typst_blocks.push((span, typst_content));
-                new_code_span_start = true;
+            if let Event::InlineMath(math_content) = e {
+                typst_blocks.push((
+                    span,
+                    format!("#set page(width: auto, height: auto, margin: 0.5em)\n{math_content}"),
+                    true,
+                ))
+            } else if let Event::DisplayMath(math_content) = e {
+                let math_content = math_content.trim();
+                typst_blocks.push((
+                    span,
+                    format!("#set page(width: auto, height: auto, margin: 0.5em)\n{math_content}"),
+                    false,
+                ))
             }
         }
 
         let mut content = chapter.content.to_string();
 
-        for (span, block) in typst_blocks.iter().rev() {
+        for (span, block, inline) in typst_blocks.iter().rev() {
             let pre_content = &content[0..span.start];
             let post_content = &content[span.end..];
 
-            let mut temp_src = NamedTempFile::new()?;
-            write!(
-                temp_src,
-                "#set page(width:auto, height:auto, margin:0.5em)\n{}",
-                block
-            )?;
+            let svg = self
+                .compiler
+                .render(block.clone())
+                .map_err(|e| anyhow!(e))?;
 
-            let temp_dst = NamedTempFile::new()?;
-            Command::new("typst")
-                .args([
-                    "compile",
-                    temp_src.path().to_str().unwrap(),
-                    "-f",
-                    "svg",
-                    temp_dst.path().to_str().unwrap(),
-                ])
-                .output()?;
-
-            let svg = std::fs::read_to_string(temp_dst.path())?;
-
-            content = format!(
-                "{}<div class=\"typst-wrapper\">{}</div>{}",
-                pre_content, svg, post_content
-            );
+            content = match inline {
+                true => format!(
+                    "{}<span class=\"typst-inline\">{}</span>{}",
+                    pre_content, svg, post_content
+                ),
+                false => format!(
+                    "{}<div class=\"typst-display\">{}</div>{}",
+                    pre_content, svg, post_content
+                ),
+            };
         }
 
         Ok(content)

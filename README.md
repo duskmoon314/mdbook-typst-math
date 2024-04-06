@@ -29,13 +29,18 @@ Add css to control the style of the typst block:
 
 ```css
 /* css/typst.css as an example */
-.typst-wrapper {
-    display: flex;
+.typst-inline {
+    display: inline flex;
+    vertical-align: bottom;
+}
+
+.typst-display {
+    display: block flex;
     justify-content: center;
 }
 
-.typst-doc {
-    transform: scale(1.75);
+.typst-display>.typst-doc {
+    transform: scale(1.5);
 }
 ```
 
@@ -48,17 +53,17 @@ additional-css = ["css/typst.css"]
 
 ### What this preprocessor does
 
-This preprocessor will convert all code blocks with the language `typst` to a
-`<div>` with the class `typst-wrapper` and a `<svg>` with the class `typst-doc`
-inside.
+This preprocessor will convert all math blocks to a `<div>` with the class
+`typst-inline`/`typst-display` (depends on the type of math blocks) and a
+`<svg>` with the class `typst-doc` inside.
 
 Say you have the following code block in your markdown:
 
 ```markdown
     hello
-    ```typst
+    $$
     y = f(x)
-    ```
+    $$
     world
 ```
 
@@ -66,10 +71,10 @@ This preprocessor will first change it to:
 
 ```diff
     hello
-    ```typst
+    $$
 +   #set page(width:auto, height:auto, margin:0.5em)
     y = f(x)
-    ```
+    $$
     world
 ```
 
@@ -77,7 +82,7 @@ Then preprocessor will convert it to:
 
 ```html
 hello
-<div class="typst-wrapper">
+<div class="typst-display">
     <svg class="typst-doc" ...></svg>
 </div>
 world
@@ -85,5 +90,6 @@ world
 
 ## TODO
 
-- [ ] Integrate `typst` in code instead of using `std::process::Commend`
+- [x] Integrate `typst` in code instead of using `std::process::Commend`
+  - [ ] Refactor the code to improve readability and maintainability
 - [ ] Allow user to configure the preambles through `book.toml`
