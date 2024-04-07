@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use anyhow::anyhow;
 use mdbook::book::{Book, Chapter};
 use mdbook::errors::Result;
@@ -8,43 +10,63 @@ use pulldown_cmark::{Event, Options, Parser};
 mod compiler;
 use compiler::Compiler;
 use typst::foundations::Bytes;
-use typst::text::Font;
+use typst::text::{Font, FontInfo};
 
-pub struct TypstProcessor {
-    compiler: Compiler,
-}
-
-impl TypstProcessor {
-    pub fn new() -> Self {
-        // Read the default font dir
-        // TODO: handle all OSes
-        let fonts = glob::glob("/usr/share/fonts/**/*.ttf")
-            .unwrap()
-            .map(Result::unwrap)
-            .flat_map(|path| {
-                let bytes = std::fs::read(&path).unwrap();
-                let buffer = Bytes::from(bytes);
-                let face_count = ttf_parser::fonts_in_collection(&buffer).unwrap_or(1);
-                (0..face_count).map(move |face| {
-                    Font::new(buffer.clone(), face)
-                        .unwrap_or_else(|| panic!("Failed to load font {:?} face {}", path, face))
-                })
-            })
-            .collect();
-
-        Self {
-            compiler: Compiler::new(fonts),
-        }
-    }
-}
+pub struct TypstProcessor;
 
 impl Preprocessor for TypstProcessor {
     fn name(&self) -> &str {
         "typst"
     }
 
-    fn run(&self, _ctx: &PreprocessorContext, mut book: Book) -> Result<Book> {
-        // TODO: use config of the preprocessor
+    fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book> {
+        let config = ctx.config.get_preprocessor(self.name());
+        let mut compiler = Compiler::new();
+
+        let mut db = fontdb::Database::new();
+        // Load fonts from the config
+        if let Some(fonts) = config.and_then(|c| c.get("fonts")) {
+            if let Some(fonts) = fonts.as_array() {
+                for font in fonts {
+                    let font = font.as_str().unwrap();
+                    db.load_fonts_dir(font);
+                }
+            };
+            if let Some(font) = fonts.as_str() {
+                db.load_fonts_dir(font);
+            };
+        }
+        // Load system fonts, lower priority
+        db.load_system_fonts();
+
+        // Add all fonts to the compiler
+        for face in db.faces() {
+            let info = db
+                .with_face_data(face.id, FontInfo::new)
+                .expect("Failed to load font info");
+            if let Some(info) = info {
+                compiler.book.update(|book| book.push(info));
+                if let Some(font) = match &face.source {
+                    fontdb::Source::File(path) | fontdb::Source::SharedFile(path, _) => {
+                        let bytes = std::fs::read(path).expect("Failed to read font file");
+                        Font::new(Bytes::from(bytes), face.index)
+                    }
+                    fontdb::Source::Binary(data) => {
+                        Font::new(Bytes::from(data.as_ref().as_ref()), face.index)
+                    }
+                } {
+                    compiler.fonts.push(font);
+                }
+            }
+        }
+
+        // Set the cache dir
+        if let Some(cache) = config.and_then(|c| c.get("cache")) {
+            compiler.cache = cache
+                .as_str()
+                .map(PathBuf::from)
+                .expect("cache dir must be a string");
+        }
 
         // record if any errors occurred
         let mut res = None;
@@ -55,7 +77,7 @@ impl Preprocessor for TypstProcessor {
             }
 
             if let BookItem::Chapter(ref mut chapter) = *item {
-                res = Some(self.convert_typst(chapter).map(|c| {
+                res = Some(self.convert_typst(chapter, &compiler).map(|c| {
                     chapter.content = c;
                 }))
             }
@@ -70,13 +92,8 @@ impl Preprocessor for TypstProcessor {
 }
 
 impl TypstProcessor {
-    fn convert_typst(&self, chapter: &mut Chapter) -> Result<String> {
+    fn convert_typst(&self, chapter: &mut Chapter, compiler: &Compiler) -> Result<String> {
         let mut typst_blocks = Vec::new();
-
-        // let mut typst_content = String::new();
-        // let mut in_typst_block = false;
-        // let mut new_code_span_start = true;
-        // let mut code_span = 0..0;
 
         let mut opts = Options::empty();
         opts.insert(Options::ENABLE_TABLES);
@@ -109,10 +126,7 @@ impl TypstProcessor {
             let pre_content = &content[0..span.start];
             let post_content = &content[span.end..];
 
-            let svg = self
-                .compiler
-                .render(block.clone())
-                .map_err(|e| anyhow!(e))?;
+            let svg = compiler.render(block.clone()).map_err(|e| anyhow!(e))?;
 
             content = match inline {
                 true => format!(

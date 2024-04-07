@@ -48,20 +48,20 @@ impl File {
 ///
 /// This is the compiler which has all the necessary fields except the source
 pub struct Compiler {
-    library: Prehashed<Library>,
-    book: Prehashed<FontBook>,
-    fonts: Vec<Font>,
+    pub library: Prehashed<Library>,
+    pub book: Prehashed<FontBook>,
+    pub fonts: Vec<Font>,
 
-    cache: PathBuf,
-    files: RefCell<HashMap<FileId, File>>,
+    pub cache: PathBuf,
+    pub files: RefCell<HashMap<FileId, File>>,
 }
 
 impl Compiler {
-    pub fn new(fonts: Vec<Font>) -> Self {
+    pub fn new() -> Self {
         Self {
             library: Prehashed::new(Library::default()),
-            book: Prehashed::new(FontBook::from_fonts(&fonts)),
-            fonts,
+            book: Prehashed::new(FontBook::default()),
+            fonts: Vec::new(),
 
             cache: PathBuf::new(),
             files: RefCell::new(HashMap::new()),
@@ -79,7 +79,7 @@ impl Compiler {
     /// Get the package directory or download if not exists
     fn package(&self, package: &PackageSpec) -> PackageResult<PathBuf> {
         let package_subdir = format!("{}/{}/{}", package.namespace, package.name, package.version);
-        let path = self.cache.join(&package_subdir);
+        let path = self.cache.join(package_subdir);
 
         if path.exists() {
             return Ok(path);
@@ -91,7 +91,7 @@ impl Compiler {
             package.namespace, package.name, package.version
         );
 
-        let mut response = reqwest::blocking::get(&package_url).map_err(|e| {
+        let mut response = reqwest::blocking::get(package_url).map_err(|e| {
             PackageError::NetworkFailed(Some(eco_format!(
                 "Failed to download package {}: {}",
                 package.name,
@@ -183,8 +183,8 @@ impl Compiler {
             .iter()
             .map(|page| {
                 let frame = &page.frame;
-                let image = svg(frame);
-                return image;
+                // FIXME: find out why font is not working like in typst cli
+                svg(frame)
             })
             .collect::<Vec<_>>();
         let images = images.join("\n");
