@@ -1,13 +1,13 @@
 .typst-inline {
-    display: inline flex;
-    vertical-align: bottom;
+  display: inline flex;
+  vertical-align: bottom;
 }
 
 .typst-display {
-    display: block flex;
-    justify-content: center;
+  display: block flex;
+  justify-content: center;
 }
 
-.typst-display>.typst-doc {
-    transform: scale(1.5);
+.typst-display > .typst-doc {
+  transform: scale(1.5);
 }

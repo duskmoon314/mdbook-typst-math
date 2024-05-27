@@ -1,25 +1,38 @@
 [package]
-name = "mdbook-typst"
+name = "mdbook-typst-math"
 version = "0.1.0"
 edition = "2021"
 authors = ["duskmoon (Campbell He) <kp.campbell.he@duskmoon314.com>"]
-description = "mdbook preprocessor to add typst support"
+description = "An mdbook preprocessor to use typst to render math."
+readme = "README.md"
+repository = "https://github.com/duskmoon314/mdbook-typst-math"
 license = "MIT"
+license-file = "LICENSE"
+keywords = ["mdbook", "typst", "mdbook-preprocessor"]
+exclude = ["/example"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.81"
+anyhow = "1.0.86"
 clap = { version = "4.5.4", features = ["derive"] }
 comemo = "0.4.0"
-flate2 = "1.0.28"
-fontdb = "0.16.2"
-mdbook = "0.4.37"
-pulldown-cmark = { git = "https://github.com/pulldown-cmark/pulldown-cmark.git", branch = "branch_0.11" }
-reqwest = { version = "0.12.3", features = ["blocking"] }
-semver = "1.0.22"
-serde_json = "1.0.115"
+flate2 = "1.0.30"
+fontdb = "0.17.0"
+mdbook = "0.4.40"
+pulldown-cmark = "0.11.0"
+reqwest = { version = "0.12.4", features = ["blocking"] }
+semver = "1.0.23"
+serde_json = "1.0.117"
 tar = "0.4.40"
-time = { version = "0.3.34", features = ["local-offset"] }
-typst = { version = "0.11.0", git = "https://github.com/typst/typst.git", tag = "v0.11.0" }
-typst-svg = { version = "0.11.0", git = "https://github.com/typst/typst.git", tag = "v0.11.0" }
+time = { version = "0.3.36", features = ["local-offset"] }
+toml = "0.8.13"
+typst = "0.11.1"
+typst-assets = { version = "0.11.1", features = ["fonts"], optional = true }
+typst-svg = "0.11.1"
+
+[features]
+default = ["embed-fonts"]
+
+# Embed fonts from typst-assets
+embed-fonts = ["typst-assets"]

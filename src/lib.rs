@@ -12,6 +12,18 @@ use compiler::Compiler;
 use typst::foundations::Bytes;
 use typst::text::{Font, FontInfo};
 
+/// Options that are passed to the compile step
+pub struct TypstProcessorOptions {
+    /// preamble to be added before each content
+    ///
+    /// This is used as fallback if the following options are not set
+    pub preamble: String,
+    /// preamble to be added before each inline math
+    pub inline_preamble: Option<String>,
+    /// preamble to be added before each display math
+    pub display_preamble: Option<String>,
+}
+
 pub struct TypstProcessor;
 
 impl Preprocessor for TypstProcessor {
@@ -22,6 +34,35 @@ impl Preprocessor for TypstProcessor {
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book> {
         let config = ctx.config.get_preprocessor(self.name());
         let mut compiler = Compiler::new();
+
+        // Set options
+        let mut opts = TypstProcessorOptions {
+            preamble: String::from("#set page(width: auto, height: auto, margin: 0.5em)"),
+            inline_preamble: None,
+            display_preamble: None,
+        };
+        if let Some(preamble) = config.and_then(|c| c.get("preamble")) {
+            opts.preamble = preamble
+                .as_str()
+                .map(String::from)
+                .expect("preamble must be a string");
+        }
+        if let Some(inline_preamble) = config.and_then(|c| c.get("inline_preamble")) {
+            opts.inline_preamble = Some(
+                inline_preamble
+                    .as_str()
+                    .map(String::from)
+                    .expect("inline_preamble must be a string"),
+            );
+        }
+        if let Some(display_preamble) = config.and_then(|c| c.get("display_preamble")) {
+            opts.display_preamble = Some(
+                display_preamble
+                    .as_str()
+                    .map(String::from)
+                    .expect("display_preamble must be a string"),
+            );
+        }
 
         let mut db = fontdb::Database::new();
         // Load fonts from the config
@@ -39,7 +80,7 @@ impl Preprocessor for TypstProcessor {
         // Load system fonts, lower priority
         db.load_system_fonts();
 
-        // Add all fonts to the compiler
+        // Add all fonts in db to the compiler
         for face in db.faces() {
             let info = db
                 .with_face_data(face.id, FontInfo::new)
@@ -55,6 +96,18 @@ impl Preprocessor for TypstProcessor {
                         Font::new(Bytes::from(data.as_ref().as_ref()), face.index)
                     }
                 } {
+                    compiler.fonts.push(font);
+                }
+            }
+        }
+
+        #[cfg(feature = "embed-fonts")]
+        {
+            // Load typst embedded fonts, lowest priority
+            for data in typst_assets::fonts() {
+                let buffer = Bytes::from_static(data);
+                for font in Font::iter(buffer) {
+                    compiler.book.update(|book| book.push(font.info().clone()));
                     compiler.fonts.push(font);
                 }
             }
@@ -77,7 +130,7 @@ impl Preprocessor for TypstProcessor {
             }
 
             if let BookItem::Chapter(ref mut chapter) = *item {
-                res = Some(self.convert_typst(chapter, &compiler).map(|c| {
+                res = Some(self.convert_typst(chapter, &compiler, &opts).map(|c| {
                     chapter.content = c;
                 }))
             }
@@ -92,29 +145,40 @@ impl Preprocessor for TypstProcessor {
 }
 
 impl TypstProcessor {
-    fn convert_typst(&self, chapter: &mut Chapter, compiler: &Compiler) -> Result<String> {
+    fn convert_typst(
+        &self,
+        chapter: &mut Chapter,
+        compiler: &Compiler,
+        opts: &TypstProcessorOptions,
+    ) -> Result<String> {
         let mut typst_blocks = Vec::new();
 
-        let mut opts = Options::empty();
-        opts.insert(Options::ENABLE_TABLES);
-        opts.insert(Options::ENABLE_FOOTNOTES);
-        opts.insert(Options::ENABLE_STRIKETHROUGH);
-        opts.insert(Options::ENABLE_TASKLISTS);
-        opts.insert(Options::ENABLE_MATH);
+        let mut pulldown_cmark_opts = Options::empty();
+        pulldown_cmark_opts.insert(Options::ENABLE_TABLES);
+        pulldown_cmark_opts.insert(Options::ENABLE_FOOTNOTES);
+        pulldown_cmark_opts.insert(Options::ENABLE_STRIKETHROUGH);
+        pulldown_cmark_opts.insert(Options::ENABLE_TASKLISTS);
+        pulldown_cmark_opts.insert(Options::ENABLE_MATH);
 
-        let parser = Parser::new_ext(&chapter.content, opts);
+        let parser = Parser::new_ext(&chapter.content, pulldown_cmark_opts);
         for (e, span) in parser.into_offset_iter() {
             if let Event::InlineMath(math_content) = e {
                 typst_blocks.push((
                     span,
-                    format!("#set page(width: auto, height: auto, margin: 0.5em)\n{math_content}"),
+                    format!(
+                        "{}\n${math_content}$",
+                        opts.inline_preamble.as_ref().unwrap_or(&opts.preamble)
+                    ),
                     true,
                 ))
             } else if let Event::DisplayMath(math_content) = e {
                 let math_content = math_content.trim();
                 typst_blocks.push((
                     span,
-                    format!("#set page(width: auto, height: auto, margin: 0.5em)\n{math_content}"),
+                    format!(
+                        "{}\n$ {math_content} $",
+                        opts.display_preamble.as_ref().unwrap_or(&opts.preamble)
+                    ),
                     false,
                 ))
             }

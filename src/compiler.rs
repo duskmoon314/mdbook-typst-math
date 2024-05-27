@@ -183,7 +183,6 @@ impl Compiler {
             .iter()
             .map(|page| {
                 let frame = &page.frame;
-                // FIXME: find out why font is not working like in typst cli
                 svg(frame)
             })
             .collect::<Vec<_>>();

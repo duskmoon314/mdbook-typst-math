@@ -24,7 +24,7 @@ enum Command {
 fn main() {
     let cli = Cli::parse();
 
-    let pre = mdbook_typst::TypstProcessor;
+    let pre = mdbook_typst_math::TypstProcessor;
 
     match cli.command {
         Some(Command::Supports { .. }) => {

@@ -5,7 +5,11 @@ multilingual = false
 src = "src"
 
 [preprocessor.typst]
-command = "./target/release/mdbook-typst"
+command = "./target/release/mdbook-typst-math"
+preamble = """
+#set page(width: auto, height: auto, margin: 0.5em)
+#set text(size: 12pt)
+"""
 
 [output.html]
 additional-css = ["css/typst.css"]
