@@ -4,7 +4,7 @@ language = "en"
 multilingual = false
 src = "src"
 
-[preprocessor.typst]
+[preprocessor.typst-math]
 command = "./target/release/mdbook-typst-math"
 preamble = """
 #set page(width: auto, height: auto, margin: 0.5em)

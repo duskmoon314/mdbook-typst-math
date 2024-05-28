@@ -1,6 +1,6 @@
-# mdbook-typst example
+# mdbook-typst-math example
 
-Here is some simple examples showing how `mdbook-typst` renders math blocks with
+Here is some simple examples showing how `mdbook-typst-math` renders math blocks with
 `typst`.
 
 ---

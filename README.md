@@ -18,11 +18,11 @@ cargo build --release
 Add the following to your `book.toml`:
 
 ```toml
-[preprocessor.typst]
-command = "/path/to/mdbook-typst"
+[preprocessor.typst-math]
+command = "/path/to/mdbook-typst-math"
 ```
 
-The path is usually `~/.cargo/bin/mdbook-typst` if you installed it using `cargo`.
+The path is usually `~/.cargo/bin/mdbook-typst-math` if you installed it using `cargo`.
 
 Other configurations see the following section: [Configuration](#configuration).
 

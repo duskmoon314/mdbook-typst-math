@@ -28,7 +28,7 @@ pub struct TypstProcessor;
 
 impl Preprocessor for TypstProcessor {
     fn name(&self) -> &str {
-        "typst"
+        "typst-math"
     }
 
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book> {

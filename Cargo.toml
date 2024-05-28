@@ -1,13 +1,12 @@
 [package]
 name = "mdbook-typst-math"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["duskmoon (Campbell He) <kp.campbell.he@duskmoon314.com>"]
 description = "An mdbook preprocessor to use typst to render math."
 readme = "README.md"
 repository = "https://github.com/duskmoon314/mdbook-typst-math"
 license = "MIT"
-license-file = "LICENSE"
 keywords = ["mdbook", "typst", "mdbook-preprocessor"]
 exclude = ["/example"]
 

@@ -16,7 +16,7 @@ struct Cli {
 #[derive(Subcommand, Debug)]
 enum Command {
     Supports {
-        /// Check whether a renderer is supported by mdbook-typst-preprocessor
+        /// Check whether a renderer is supported by mdbook-typst-math preprocessor
         renderer: String,
     },
 }
