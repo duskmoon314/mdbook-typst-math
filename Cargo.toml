@@ -8,7 +8,14 @@ readme = "README.md"
 repository = "https://github.com/duskmoon314/mdbook-typst-math"
 license = "MIT"
 keywords = ["mdbook", "typst", "mdbook-preprocessor"]
-exclude = ["/example"]
+include = [
+    "/src",
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/README.md",
+    "/LICENSE",
+    "/.cargo",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -20,7 +27,10 @@ flate2 = "1.0.30"
 fontdb = "0.17.0"
 mdbook = "0.4.40"
 pulldown-cmark = "0.11.0"
-reqwest = { version = "0.12.4", features = ["blocking"] }
+reqwest = { version = "0.12.4", default-features = false, features = [
+    "blocking",
+    "rustls-tls",
+] }
 semver = "1.0.23"
 serde_json = "1.0.117"
 tar = "0.4.40"
