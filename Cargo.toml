@@ -26,7 +26,7 @@ comemo = "0.4.0"
 flate2 = "1.0.30"
 fontdb = "0.17.0"
 mdbook = "0.4.40"
-pulldown-cmark = "0.11.0"
+pulldown-cmark = "0.13.0"
 reqwest = { version = "0.12.4", default-features = false, features = [
     "blocking",
     "rustls-tls",
