@@ -20,25 +20,25 @@ include = [
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1.0.86"
-clap = { version = "4.5.4", features = ["derive"] }
-comemo = "0.4.0"
-flate2 = "1.0.30"
-fontdb = "0.17.0"
-mdbook = "0.4.40"
-pulldown-cmark = "0.11.0"
-reqwest = { version = "0.12.4", default-features = false, features = [
+anyhow = "1.0.100"
+clap = { version = "4.5.53", features = ["derive"] }
+flate2 = "1.1.5"
+fontdb = "0.23.0"
+mdbook-preprocessor = "0.5.1"
+pulldown-cmark = "0.13.0"
+reqwest = { version = "0.12.24", default-features = false, features = [
     "blocking",
     "rustls-tls",
 ] }
-semver = "1.0.23"
-serde_json = "1.0.117"
-tar = "0.4.40"
-time = { version = "0.3.36", features = ["local-offset"] }
-toml = "0.8.13"
-typst = "0.11.1"
-typst-assets = { version = "0.11.1", features = ["fonts"], optional = true }
-typst-svg = "0.11.1"
+semver = "1.0.27"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.145"
+tar = "0.4.44"
+time = { version = "0.3.44", features = ["local-offset"] }
+toml = "0.8.23"
+typst = "0.14.0"
+typst-assets = { version = "0.14.0", features = ["fonts"], optional = true }
+typst-svg = "0.14.0"
 
 [features]
 default = ["embed-fonts"]

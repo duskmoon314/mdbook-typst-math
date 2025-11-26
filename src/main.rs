@@ -1,10 +1,7 @@
 use std::{io, process};
 
 use clap::{Parser, Subcommand};
-use mdbook::{
-    errors::Error,
-    preprocess::{CmdPreprocessor, Preprocessor},
-};
+use mdbook_preprocessor::{errors::Error, parse_input, Preprocessor};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -39,7 +36,7 @@ fn main() {
 
 fn handle_supports(pre: &dyn Preprocessor, cli: &Cli) {
     if let Some(Command::Supports { renderer }) = &cli.command {
-        let supported = pre.supports_renderer(renderer);
+        let supported = pre.supports_renderer(renderer).unwrap_or(false);
 
         if supported {
             process::exit(0);
@@ -52,7 +49,7 @@ fn handle_supports(pre: &dyn Preprocessor, cli: &Cli) {
 }
 
 fn handle_preprocess(pre: &dyn Preprocessor) -> Result<(), Error> {
-    let (ctx, book) = CmdPreprocessor::parse_input(io::stdin())?;
+    let (ctx, book) = parse_input(io::stdin())?;
 
     let processed_book = pre.run(&ctx, book)?;
     serde_json::to_writer(io::stdout(), &processed_book)?;
