@@ -5,9 +5,11 @@ src = "src"
 
 [preprocessor.typst-math]
 command = "../target/release/mdbook-typst-math"
+cache = ".typst-cache"
 preamble = """
 #set page(width: auto, height: auto, margin: 0.5em)
 #set text(size: 12pt)
+#import "@preview/physica:0.9.3": *
 """
 
 [output.html]

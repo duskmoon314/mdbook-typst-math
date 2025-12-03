@@ -149,7 +149,41 @@ display_preamble = """
 #set text(size: 14pt)
 #show math.equation: set text(font: "Fira Math")
 """
+
+# Cache directory for downloaded packages
+#
+# If you want to use Typst packages (e.g., physica), you should set this.
+# The packages will be downloaded from packages.typst.org and cached here.
+cache = ".typst-cache"
 ````
+
+### Using Typst Packages
+
+This preprocessor supports Typst packages from [Typst Universe](https://typst.app/universe).
+Packages are automatically downloaded and cached when first used.
+
+To use a package like [physica](https://typst.app/universe/package/physica), add the import to your preamble:
+
+```toml
+[preprocessor.typst-math]
+cache = ".typst-cache"
+preamble = """
+#set page(width:auto, height:auto, margin:0.5em)
+#import "@preview/physica:0.9.3": *
+"""
+```
+
+Then you can use the package features in your math blocks:
+
+```markdown
+The derivative is $dv(f,x)$ and the partial derivative is $pdv(f,x,y)$.
+
+$$
+grad f = vu(x) pdv(f,x) + vu(y) pdv(f,y)
+$$
+```
+
+> **Note:** Make sure to set the `cache` option to specify where downloaded packages should be stored. You may want to add this directory to your `.gitignore`.
 
 ## TODO
 
