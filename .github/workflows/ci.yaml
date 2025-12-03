@@ -56,7 +56,7 @@ jobs:
         if: ${{ matrix.os == 'windows-latest' }}
         run: mv target/${{ matrix.target }}/release/mdbook-typst-math${{ matrix.suffix }} mdbook-typst-math-${{ matrix.target }}${{ matrix.suffix }}
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: mdbook-typst-math-${{ matrix.target }}
           path: mdbook-typst-math-${{ matrix.target }}${{ matrix.suffix }}
@@ -83,7 +83,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with:
           path: artifacts
       - name: List Artifacts
