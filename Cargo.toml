@@ -2,7 +2,10 @@
 name = "mdbook-typst-math"
 version = "0.1.1"
 edition = "2021"
-authors = ["duskmoon (Campbell He) <kp.campbell.he@duskmoon314.com>"]
+authors = [
+    "duskmoon (Campbell He) <kp.campbell.he@duskmoon314.com>",
+    "sakuraba07 <207140744+sakuraba07@users.noreply.github.com>",
+]
 description = "An mdbook preprocessor to use typst to render math."
 readme = "README.md"
 repository = "https://github.com/duskmoon314/mdbook-typst-math"
