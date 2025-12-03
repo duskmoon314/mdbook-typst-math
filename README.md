@@ -2,6 +2,11 @@
 
 An mdbook preprocessor to use [typst](https://typst.app/) to render math.
 
+## Requirements
+
+- **mdBook 0.5.x or later** - This preprocessor uses the `mdbook-preprocessor` crate which requires mdBook 0.5.x
+- Rust (for building from source)
+
 ## Installation
 
 ```shell
