@@ -108,7 +108,7 @@ This preprocessor will first change it to:
 - $$
 - y = f(x)
 - $$
-+ #set page(width:auto, height:auto, margin:0.5em)
++ #set page(width:auto, height:auto, margin:0.5em, fill:none)
 + $ y = f(x) $
   world
 ```
@@ -148,10 +148,20 @@ fonts = ["/path/to/FiraMath-Regular.otf"] # or "/path/to/FiraMath-Regular.otf"
 #
 # The default preamble is:
 # ```
-# #set page(width:auto, height:auto, margin:0.5em)
+# #set page(width:auto, height:auto, margin:0.5em, fill:none)
 # ```
+#
+# The `fill: none` makes the background transparent, which allows the
+# rendered math to adapt to different color themes (light/dark mode).
+# If you want a specific background color, you can set it like:
+# `fill: white` or `fill: rgb("#ffffff")` for white background.
+#
+# NOTE: When you customize `preamble`, the default value is completely
+# overwritten. If you don't specify `fill`, Typst's default (white
+# background) will be used. To keep transparent background, explicitly
+# set `fill: none` in your custom preamble.
 preamble = """
-#set page(width:auto, height:auto, margin:0.5em)
+#set page(width:auto, height:auto, margin:0.5em, fill:white)
 #set text(size: 12pt)
 #show math.equation: set text(font: "Fira Math")
 """
@@ -163,7 +173,7 @@ preamble = """
 # Usually, this is not needed. But if you want to use different settings for
 # inline math and display math, you can set this.
 inline_preamble = """
-#set page(width:auto, height:auto, margin:0.5em)
+#set page(width:auto, height:auto, margin:0.5em, fill:white)
 #set text(size: 12pt)
 #show math.equation: set text(font: "Fira Math")
 """
@@ -175,7 +185,7 @@ inline_preamble = """
 # Usually, this is not needed. But if you want to use different settings for
 # inline math and display math, you can set this.
 display_preamble = """
-#set page(width:auto, height:auto, margin:0.5em)
+#set page(width:auto, height:auto, margin:0.5em, fill:white)
 #set text(size: 14pt)
 #show math.equation: set text(font: "Fira Math")
 """

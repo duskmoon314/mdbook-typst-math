@@ -129,7 +129,7 @@ impl Preprocessor for TypstProcessor {
         // Set options from config
         let opts = TypstProcessorOptions {
             preamble: config.preamble.unwrap_or_else(|| {
-                String::from("#set page(width: auto, height: auto, margin: 0.5em)")
+                String::from("#set page(width: auto, height: auto, margin: 0.5em, fill: none)")
             }),
             inline_preamble: config.inline_preamble,
             display_preamble: config.display_preamble,
