@@ -20,6 +20,7 @@
 //! - `display_preamble`: Typst code to prepend to display math blocks
 //! - `fonts`: List of font directories to load
 //! - `cache`: Directory for caching downloaded packages
+//! - `color_mode`: Color mode for SVG output (`auto` or `static`)
 
 use std::path::PathBuf;
 
@@ -52,6 +53,31 @@ pub struct TypstProcessorOptions {
     ///
     /// If `None`, the default `preamble` is used instead.
     pub display_preamble: Option<String>,
+    /// Color mode for SVG output.
+    ///
+    /// When set to `Auto`, black color (`#000000`) in SVG will be replaced
+    /// with `currentColor`, allowing CSS to control the text color for
+    /// theme support (light/dark mode).
+    pub color_mode: ColorMode,
+}
+
+/// Color mode for SVG output.
+///
+/// This controls how the preprocessor handles colors in the generated SVG.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColorMode {
+    /// Replace black (`#000000`) with `currentColor` for CSS theme support.
+    ///
+    /// This is the default mode, which allows the SVG text color to adapt
+    /// to light/dark themes via CSS.
+    #[default]
+    Auto,
+    /// Keep colors as-is from Typst output.
+    ///
+    /// Use this mode if you want to preserve exact colors specified in Typst,
+    /// or if you're using a fixed background color.
+    Static,
 }
 
 /// Represents font configuration that accepts either a single string or an array.
@@ -93,6 +119,8 @@ struct TypstMathConfig {
 
     /// Cache directory for downloaded packages
     cache: Option<String>,
+    #[serde(default)]
+    color_mode: ColorMode,
 }
 
 /// The main preprocessor that converts math blocks to Typst-rendered SVGs.
@@ -133,6 +161,7 @@ impl Preprocessor for TypstProcessor {
             }),
             inline_preamble: config.inline_preamble,
             display_preamble: config.display_preamble,
+            color_mode: config.color_mode,
         };
 
         let mut db = fontdb::Database::new();
@@ -272,9 +301,15 @@ impl TypstProcessor {
             let pre_content = &content[0..span.start];
             let post_content = &content[span.end..];
 
-            let svg = compiler.render(block.clone()).map_err(|e: CompileError| {
+            let mut svg = compiler.render(block.clone()).map_err(|e: CompileError| {
                 anyhow!("Failed to render math in chapter '{}': {}", chapter_name, e)
             })?;
+
+            // Apply color mode transformation
+            if opts.color_mode == ColorMode::Auto {
+                svg = svg.replace(r##"fill="#000000""##, r#"fill="currentColor""#);
+                svg = svg.replace(r##"stroke="#000000""##, r#"stroke="currentColor""#);
+            }
 
             content = match inline {
                 true => format!(

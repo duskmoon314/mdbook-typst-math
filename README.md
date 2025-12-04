@@ -85,6 +85,32 @@ Add the following to your `book.toml`:
 additional-css = ["css/typst.css"]
 ```
 
+### Theme support (Dark mode)
+
+By default, this preprocessor generates SVGs with transparent backgrounds and
+replaces black text color with `currentColor`. This allows the math to adapt
+to different color themes.
+
+To make the math text color adapt to the current theme automatically, add the following CSS:
+
+```css
+/* Use the theme's foreground color for math */
+.typst-doc {
+  color: var(--fg);
+}
+```
+
+If you prefer to set specific colors for dark themes (coal, navy, ayu), you can use:
+
+```css
+/* Set specific text color for dark themes */
+html.coal .typst-doc,
+html.navy .typst-doc,
+html.ayu .typst-doc {
+  color: #b3b3b3;
+}
+```
+
 ### What this preprocessor does
 
 This preprocessor will convert all math blocks to a `<div>` with the class
@@ -195,6 +221,14 @@ display_preamble = """
 # If you want to use Typst packages (e.g., physica), you should set this.
 # The packages will be downloaded from packages.typst.org and cached here.
 cache = ".typst-cache"
+
+# Color mode for SVG output
+#
+# - "auto" (default): Replace black (#000000) with `currentColor` in SVG,
+#   allowing CSS to control text color for theme support (light/dark mode).
+# - "static": Keep colors as-is from Typst output. Use this if you want to
+#   preserve exact colors or use a fixed background color.
+color_mode = "auto"
 ````
 
 ### Using Typst Packages
