@@ -169,7 +169,7 @@ To use a package like [physica](https://typst.app/universe/package/physica), add
 cache = ".typst-cache"
 preamble = """
 #set page(width:auto, height:auto, margin:0.5em)
-#import "@preview/physica:0.9.3": *
+#import "@preview/physica:0.9.7": *
 """
 ```
 

@@ -38,7 +38,7 @@ For example, to use the [physica](https://typst.app/universe/package/physica) pa
 cache = ".typst-cache"
 preamble = """
 #set page(width: auto, height: auto, margin: 0.5em)
-#import "@preview/physica:0.9.3": *
+#import "@preview/physica:0.9.7": *
 """
 ```
 
