@@ -6,6 +6,7 @@
 .typst-display {
   display: block flex;
   justify-content: center;
+  padding: 1em 0;
 }
 
 .typst-display > .typst-doc {

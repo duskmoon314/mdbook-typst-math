@@ -1,9 +1,9 @@
 # mdbook-typst-math example
 
-Here is some simple examples showing how `mdbook-typst-math` renders math blocks with
+Here are some simple examples showing how `mdbook-typst-math` renders math blocks with
 `typst`.
 
----
+## Inline and Block Math
 
 
 ```markdown
@@ -59,3 +59,33 @@ $$
 $$
 grad f = vu(x) pdv(f, x) + vu(y) pdv(f, y) + vu(z) pdv(f, z)
 $$
+
+## Escaping the Math Mode
+
+Actually, you can escape the math mode thanks to Typst's `#[]` syntax.
+
+```markdown
+$$
+#[
+    #cetz.canvas({
+        import cetz.draw: *
+        circle((0, 0))
+        line((-1, -1), (1, 1))
+        line((-1, 1), (1, -1))
+    })
+]
+$$
+```
+
+$$
+#[
+    #cetz.canvas({
+        import cetz.draw: *
+        circle((0, 0))
+        line((-1, -1), (1, 1))
+        line((-1, 1), (1, -1))
+    })
+]
+$$
+
+> Since the code is still wrapped in a math block, the output might not be as expected. In addition, empty lines inside `#[]` may cause issues in markdown parsing. **Use this feature with caution!**

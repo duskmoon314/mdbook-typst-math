@@ -10,8 +10,11 @@ An mdbook preprocessor to use [typst](https://typst.app/) to render math.
 ## Installation
 
 ```shell
+# Install from crates.io
+cargo install mdbook-typst-math
+# OR Install the latest version from GitHub
 cargo install --git https://github.com/duskmoon314/mdbook-typst-math
-# OR
+# OR Build from source
 git clone https://github.com/duskmoon314/mdbook-typst-math.git
 cargo build --release
 ```
@@ -184,9 +187,3 @@ $$
 ```
 
 > **Note:** Make sure to set the `cache` option to specify where downloaded packages should be stored. You may want to add this directory to your `.gitignore`.
-
-## TODO
-
-- [x] Integrate `typst` in code instead of using `std::process::Commend`
-  - [ ] Refactor the code to improve readability and maintainability
-- [x] Allow user to configure the preambles through `book.toml`

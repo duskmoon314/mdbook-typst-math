@@ -10,6 +10,7 @@ preamble = """
 #set page(width: auto, height: auto, margin: 0.5em)
 #set text(size: 12pt)
 #import "@preview/physica:0.9.7": *
+#import "@preview/cetz:0.4.2"
 """
 
 [output.html]
