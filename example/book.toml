@@ -1,7 +1,9 @@
 [book]
+title = "mdbook-typst-math Documentation"
 authors = []
 language = "en"
 src = "src"
+description = "Documentation and examples for mdbook-typst-math, an mdbook preprocessor that renders math using Typst"
 
 [preprocessor.typst-math]
 command = "../target/release/mdbook-typst-math"

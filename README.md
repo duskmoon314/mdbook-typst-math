@@ -1,6 +1,9 @@
 # mdbook-typst-math
 
-An mdbook preprocessor to use [typst](https://typst.app/) to render math.
+[![Crates.io Version](https://img.shields.io/crates/v/mdbook-typst-math)](https://crates.io/crates/mdbook-typst-math)
+[![docs.rs](https://img.shields.io/docsrs/mdbook-typst-math)](https://docs.rs/mdbook-typst-math)
+
+**mdbook-typst-math** is an [mdBook](https://github.com/rust-lang/mdBook) preprocessor that uses [Typst](https://typst.app/) to render mathematical expressions.
 
 ## Requirements
 
@@ -9,15 +12,31 @@ An mdbook preprocessor to use [typst](https://typst.app/) to render math.
 
 ## Installation
 
+### Cargo
+
+You can install the latest released version from crates.io:
+
 ```shell
-# Install from crates.io
 cargo install mdbook-typst-math
-# OR Install the latest version from GitHub
+```
+
+Or install the latest version from GitHub:
+
+```shell
 cargo install --git https://github.com/duskmoon314/mdbook-typst-math
-# OR Build from source
+```
+
+Or build from source:
+
+```shell
 git clone https://github.com/duskmoon314/mdbook-typst-math.git
+cd mdbook-typst-math
 cargo build --release
 ```
+
+### Pre-built binaries
+
+You can download pre-built binaries from the [releases](https://github.com/duskmoon314/mdbook-typst-math/releases).
 
 ## Usage
 
@@ -27,12 +46,16 @@ Add the following to your `book.toml`:
 
 ```toml
 [preprocessor.typst-math]
-command = "/path/to/mdbook-typst-math"
+```
+
+If `mdbook-typst-math` is not in your `PATH`, you need to specify its location:
+
+```toml
+[preprocessor.typst-math]
+command = "path/to/mdbook-typst-math"
 ```
 
 The path is usually `~/.cargo/bin/mdbook-typst-math` if you installed it using `cargo`.
-
-Other configurations see the following section: [Configuration](#configuration).
 
 ### Control the style
 
@@ -71,26 +94,26 @@ This preprocessor will convert all math blocks to a `<div>` with the class
 Say you have the following code block in your markdown:
 
 ```markdown
-    hello
-    $$
-    y = f(x)
-    $$
-    world
+  hello
+  $$
+  y = f(x)
+  $$
+  world
 ```
 
 This preprocessor will first change it to:
 
 ```diff
-    hello
-    $$
-+   #set page(width:auto, height:auto, margin:0.5em)
-+   $ y = f(x) $
--   y = f(x)
-    $$
-    world
+  hello
+- $$
+- y = f(x)
+- $$
++ #set page(width:auto, height:auto, margin:0.5em)
++ $ y = f(x) $
+  world
 ```
 
-The above is a valid `typst` code. The dollar signs `$` and whitespaces are used to let typst knows it is a math block instead of an inline math.
+The math content is wrapped in `typst`'s `$ ... $` to indicate it is a math block, and a preamble is added before it to set the page size and margin.
 
 Then preprocessor will leverage `typst` to render the math block and change it to:
 
@@ -101,6 +124,10 @@ hello
 </div>
 world
 ```
+
+$$
+y = f(x)
+$$
 
 ### Configuration
 
@@ -115,7 +142,7 @@ Currently, only following configurations are supported. Here we use an example t
 #
 # Usually, you don't need to set this since the default build of preprocessor
 # will load system fonts and typst embedded fonts.
-fonts = ["Fira Math"] # or "Fira Math"
+fonts = ["/path/to/FiraMath-Regular.otf"] # or "/path/to/FiraMath-Regular.otf"
 
 # Preamble to be added before the typst code
 #
@@ -131,7 +158,7 @@ preamble = """
 
 # Preamble to be added before the typst code for inline math
 #
-# If not set, the `preamble` will be used.
+# If not set, then `preamble` will be used.
 #
 # Usually, this is not needed. But if you want to use different settings for
 # inline math and display math, you can set this.
@@ -143,7 +170,7 @@ inline_preamble = """
 
 # Preamble to be added before the typst code for display math
 #
-# If not set, the `preamble` will be used.
+# If not set, then `preamble` will be used.
 #
 # Usually, this is not needed. But if you want to use different settings for
 # inline math and display math, you can set this.
@@ -186,4 +213,13 @@ grad f = vu(x) pdv(f,x) + vu(y) pdv(f,y)
 $$
 ```
 
+$$
+grad f = vu(x) pdv(f,x) + vu(y) pdv(f,y)
+$$
+
 > **Note:** Make sure to set the `cache` option to specify where downloaded packages should be stored. You may want to add this directory to your `.gitignore`.
+>
+> You may also want to re-use the same cache directory as your Typst installation by setting `cache` to:
+> - `$XDG_CACHE_HOME/typst/packages` or `~/.cache/typst/packages` on Linux
+> - `~/Library/Caches/typst/packages` on macOS
+> - `%LOCALAPPDATA%\typst\packages` on Windows
