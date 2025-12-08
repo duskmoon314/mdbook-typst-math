@@ -283,9 +283,9 @@ impl Compiler {
             }
             Err(errors) => {
                 print_diagnostics(&world, &warnings, &errors)?;
-                Err(CompileError::Compilation(format!(
-                    "typst compilation failed"
-                )))
+                Err(CompileError::Compilation(
+                    "typst compilation failed".to_string(),
+                ))
             }
         }
     }

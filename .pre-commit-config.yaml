@@ -1,0 +1,17 @@
+repos:
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt check
+        description: Run cargo fmt to check Rust code formatting
+        entry: cargo fmt --all --check
+        language: unsupported
+        pass_filenames: false
+        fail_fast: true
+      - id: cargo-clippy
+        name: cargo clippy check
+        description: Run cargo clippy to check for common mistakes and improve Rust code
+        entry: cargo clippy --all -- -D warnings
+        language: unsupported
+        pass_filenames: false
+        fail_fast: true
