@@ -7,14 +7,21 @@
 
 use std::{collections::HashMap, fmt, io::Write, path::PathBuf, sync::RwLock};
 
+use codespan_reporting::{
+    diagnostic::{Diagnostic, Label},
+    term,
+};
+use tracing::{error, warn};
 use typst::{
-    diag::{eco_format, FileError, FileResult, PackageError, PackageResult},
+    diag::{
+        eco_format, FileError, FileResult, PackageError, PackageResult, SourceDiagnostic, Warned,
+    },
     foundations::{Bytes, Datetime},
     layout::PagedDocument,
-    syntax::{package::PackageSpec, FileId, Source},
+    syntax::{package::PackageSpec, FileId, Lines, Source, Span},
     text::{Font, FontBook},
     utils::LazyHash,
-    Library, LibraryExt, World,
+    Library, LibraryExt, World, WorldExt,
 };
 use typst_svg::svg;
 
@@ -264,21 +271,23 @@ impl Compiler {
     pub fn render(&self, source: impl Into<String>) -> Result<String, CompileError> {
         let source = source.into();
         let world = self.wrap_source(source);
-        let result = typst::compile::<PagedDocument>(&world);
 
-        // Log warnings if any
-        for warning in &result.warnings {
-            eprintln!("Typst warning: {:?}", warning);
+        let Warned { output, warnings } = typst::compile::<PagedDocument>(&world);
+
+        match output {
+            Ok(document) => {
+                print_diagnostics(&world, &warnings, &[])?;
+                let images = document.pages.iter().map(svg).collect::<Vec<_>>();
+                let images = images.join("\n");
+                Ok(images)
+            }
+            Err(errors) => {
+                print_diagnostics(&world, &warnings, &errors)?;
+                Err(CompileError::Compilation(format!(
+                    "typst compilation failed"
+                )))
+            }
         }
-
-        let document = result
-            .output
-            .map_err(|diags| CompileError::Compilation(format!("{:?}", diags)))?;
-
-        let images = document.pages.iter().map(svg).collect::<Vec<_>>();
-        let images = images.join("\n");
-
-        Ok(images)
     }
 }
 
@@ -294,6 +303,18 @@ pub struct WrapSource<'a> {
     source: Source,
     /// The time to use for date-related Typst functions.
     time: time::OffsetDateTime,
+}
+
+impl WrapSource<'_> {
+    pub fn lookup(&self, id: FileId) -> Lines<String> {
+        if let Ok(source) = self.compiler.get_source(id) {
+            source.lines().clone()
+        } else if let Ok(bytes) = self.compiler.get_file(id) {
+            Lines::try_from(&bytes).expect("not valid utf-8")
+        } else {
+            self.source.lines().clone()
+        }
+    }
 }
 
 impl World for WrapSource<'_> {
@@ -328,4 +349,110 @@ impl World for WrapSource<'_> {
     fn today(&self, _offset: Option<i64>) -> Option<Datetime> {
         Some(Datetime::Date(self.time.date()))
     }
+}
+
+// Mostly copied from typst: https://github.com/typst/typst/blob/7fb4aa0aec314bb8ef99b8096d8d65a8e63b17e6/crates/typst-cli/src/compile.rs#L680
+impl<'a> codespan_reporting::files::Files<'a> for WrapSource<'a> {
+    type FileId = FileId;
+    type Name = String;
+    type Source = Lines<String>;
+
+    fn name(&'a self, id: Self::FileId) -> Result<Self::Name, codespan_reporting::files::Error> {
+        let vpath = id.vpath();
+        Ok(if let Some(package) = id.package() {
+            format!("{package}{}", vpath.as_rooted_path().display())
+        } else {
+            format!("{}", vpath.as_rootless_path().display())
+        })
+    }
+
+    fn source(
+        &'a self,
+        id: Self::FileId,
+    ) -> Result<Self::Source, codespan_reporting::files::Error> {
+        Ok(self.lookup(id))
+    }
+
+    fn line_index(
+        &'a self,
+        id: Self::FileId,
+        byte_index: usize,
+    ) -> Result<usize, codespan_reporting::files::Error> {
+        let source = self.lookup(id);
+        source.byte_to_line(byte_index).ok_or_else(|| {
+            codespan_reporting::files::Error::IndexTooLarge {
+                given: byte_index,
+                max: source.len_bytes(),
+            }
+        })
+    }
+
+    fn line_range(
+        &'a self,
+        id: Self::FileId,
+        line_index: usize,
+    ) -> Result<std::ops::Range<usize>, codespan_reporting::files::Error> {
+        let source = self.lookup(id);
+        source.line_to_range(line_index).ok_or_else(|| {
+            codespan_reporting::files::Error::LineTooLarge {
+                given: line_index,
+                max: source.len_lines(),
+            }
+        })
+    }
+
+    fn column_number(
+        &'a self,
+        id: Self::FileId,
+        _line_index: usize,
+        byte_index: usize,
+    ) -> Result<usize, codespan_reporting::files::Error> {
+        let source = self.lookup(id);
+        source.byte_to_column(byte_index).ok_or_else(|| {
+            let max = source.len_bytes();
+            if byte_index <= max {
+                codespan_reporting::files::Error::InvalidCharBoundary { given: byte_index }
+            } else {
+                codespan_reporting::files::Error::IndexTooLarge {
+                    given: byte_index,
+                    max,
+                }
+            }
+        })
+    }
+}
+
+fn label(world: &WrapSource, span: Span) -> Option<Label<FileId>> {
+    Some(Label::primary(span.id()?, world.range(span)?))
+}
+
+pub fn print_diagnostics(
+    world: &WrapSource,
+    warnings: &[SourceDiagnostic],
+    errors: &[SourceDiagnostic],
+) -> Result<(), CompileError> {
+    for diagnostic in warnings.iter().chain(errors) {
+        let diag = match diagnostic.severity {
+            typst::diag::Severity::Error => Diagnostic::error(),
+            typst::diag::Severity::Warning => Diagnostic::warning(),
+        }
+        .with_message(diagnostic.message.clone())
+        .with_notes(
+            diagnostic
+                .hints
+                .iter()
+                .map(|s| (eco_format!("hint: {s}")).into())
+                .collect(),
+        )
+        .with_labels(label(world, diagnostic.span).into_iter().collect());
+
+        let diag = term::emit_into_string(&term::Config::default(), world, &diag)
+            .map_err(|e| CompileError::Compilation(format! {"Failed to format diagnostic: {e}"}))?;
+        match diagnostic.severity {
+            typst::diag::Severity::Error => error!("Typst: {diag}"),
+            typst::diag::Severity::Warning => warn!("Typst: {diag}"),
+        }
+    }
+
+    Ok(())
 }

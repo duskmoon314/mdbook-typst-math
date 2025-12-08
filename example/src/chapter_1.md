@@ -89,3 +89,39 @@ $$
 $$
 
 > Since the code is still wrapped in a math block, the output might not be as expected. In addition, empty lines inside `#[]` may cause issues in markdown parsing. **Use this feature with caution!**
+
+## Typst's warnings and errors
+
+Typst's warnings and errors will be shown in the console output when building the book.
+
+For example, the following block will generate a warning:
+
+```markdown
+$$
+#[
+    #set text(font: "nonexistent-font")
+]
+$$
+```
+
+$$
+#[
+    #set text(font: "nonexistent-font")
+]
+$$
+
+You will see a warning like this in the console:
+
+```console
+$ mdbook build
+ INFO Book building has started
+ WARN Typst: warning: unknown font family: nonexistent-font
+  ┌─ main.typ:7:20
+  │
+7 │     #set text(font: "nonexistent-font")
+  │                     ^^^^^^^^^^^^^^^^^^
+
+
+ INFO Running the html backend
+ INFO HTML book written to `/path/to/mdbook-typst-math/example/book`
+```

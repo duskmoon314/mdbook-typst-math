@@ -27,7 +27,6 @@ use anyhow::anyhow;
 use mdbook_preprocessor::book::{Book, BookItem, Chapter};
 use mdbook_preprocessor::errors::Result;
 use mdbook_preprocessor::{Preprocessor, PreprocessorContext};
-use pulldown_cmark::{Event, Options, Parser};
 use serde::Deserialize;
 
 mod compiler;
@@ -80,10 +79,19 @@ impl FontsConfig {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
 struct TypstMathConfig {
+    /// The preamble to prepend to all math blocks.
     preamble: Option<String>,
+
+    /// Optional preamble for inline math blocks.
     inline_preamble: Option<String>,
+
+    /// Optional preamble for display math blocks.
     display_preamble: Option<String>,
+
+    /// Custom fonts to load
     fonts: Option<FontsConfig>,
+
+    /// Cache directory for downloaded packages
     cache: Option<String>,
 }
 
@@ -216,6 +224,8 @@ impl TypstProcessor {
         compiler: &Compiler,
         opts: &TypstProcessorOptions,
     ) -> Result<String> {
+        use pulldown_cmark::{Event, Options, Parser};
+
         let chapter_name = chapter.name.as_str();
         let mut typst_blocks = Vec::new();
 
@@ -228,25 +238,31 @@ impl TypstProcessor {
 
         let parser = Parser::new_ext(&chapter.content, pulldown_cmark_opts);
         for (e, span) in parser.into_offset_iter() {
-            if let Event::InlineMath(math_content) = e {
-                typst_blocks.push((
-                    span,
-                    format!(
-                        "{}\n${math_content}$",
-                        opts.inline_preamble.as_ref().unwrap_or(&opts.preamble)
-                    ),
-                    true,
-                ))
-            } else if let Event::DisplayMath(math_content) = e {
-                let math_content = math_content.trim();
-                typst_blocks.push((
-                    span,
-                    format!(
-                        "{}\n$ {math_content} $",
-                        opts.display_preamble.as_ref().unwrap_or(&opts.preamble)
-                    ),
-                    false,
-                ))
+            match e {
+                Event::InlineMath(math_content) => {
+                    typst_blocks.push((
+                        span,
+                        format!(
+                            "{}\n${math_content}$",
+                            opts.inline_preamble.as_ref().unwrap_or(&opts.preamble)
+                        ),
+                        true,
+                    ));
+                }
+                Event::DisplayMath(math_content) => {
+                    let math_content = math_content.trim();
+                    typst_blocks.push((
+                        span,
+                        format!(
+                            "{}\n$ {math_content} $",
+                            opts.display_preamble.as_ref().unwrap_or(&opts.preamble)
+                        ),
+                        false,
+                    ));
+                }
+                // TODO: we might want to support code block with lang "typst"?
+                // Then non-math typst content could be rendered without hacking around
+                _ => {}
             }
         }
 

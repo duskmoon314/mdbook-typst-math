@@ -25,9 +25,11 @@ include = [
 [dependencies]
 anyhow = "1.0.100"
 clap = { version = "4.5.53", features = ["derive"] }
+codespan-reporting = "0.13.1"
 flate2 = "1.1.5"
 fontdb = "0.23.0"
 mdbook-preprocessor = "0.5.1"
+pathdiff = "0.2.3"
 pulldown-cmark = "0.13.0"
 reqwest = { version = "0.12.24", default-features = false, features = [
     "blocking",
@@ -37,8 +39,11 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.145"
 tar = "0.4.44"
 time = { version = "0.3.44", features = ["local-offset"] }
+tracing = "0.1.43"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 typst = "0.14.1"
 typst-assets = { version = "0.14.1", features = ["fonts"], optional = true }
+typst-html = "0.14.1"
 typst-svg = "0.14.1"
 
 [features]

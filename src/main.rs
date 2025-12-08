@@ -4,6 +4,7 @@ use std::{io, process};
 
 use clap::{Parser, Subcommand};
 use mdbook_preprocessor::{errors::Error, parse_input, Preprocessor};
+use tracing::error;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about)]
@@ -22,6 +23,21 @@ enum Command {
 }
 
 fn main() {
+    // Use tracing and tracing_subscriber to follow mdbook's style for logging
+    let filter = tracing_subscriber::EnvFilter::builder()
+        .with_env_var("MDBOOK_TYPST_MATH_LOG")
+        .with_default_directive(tracing_subscriber::filter::LevelFilter::INFO.into())
+        .from_env_lossy();
+    let with_target = std::env::var("MDBOOK_TYPST_MATH_LOG").is_ok();
+
+    tracing_subscriber::fmt()
+        .without_time()
+        .with_ansi(std::io::IsTerminal::is_terminal(&std::io::stderr()))
+        .with_writer(std::io::stderr)
+        .with_env_filter(filter)
+        .with_target(with_target)
+        .init();
+
     let cli = Cli::parse();
 
     let pre = mdbook_typst_math::TypstProcessor;
@@ -31,7 +47,7 @@ fn main() {
             handle_supports(&pre, &renderer);
         }
         None => handle_preprocess(&pre).unwrap_or_else(|e| {
-            eprintln!("Error: {}", e);
+            error!("{e}");
             process::exit(1);
         }),
     }
