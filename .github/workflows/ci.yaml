@@ -58,6 +58,7 @@ jobs:
       - name: Build example book to test
         if: ${{ matrix.os == 'ubuntu-latest' && matrix.target == 'x86_64-unknown-linux-gnu' }}
         run: |
+          cargo install mdbook
           mdbook build example
       - name: Upload Artifact
         uses: actions/upload-artifact@v5
