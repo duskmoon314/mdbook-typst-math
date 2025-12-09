@@ -59,6 +59,8 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' && matrix.target == 'x86_64-unknown-linux-gnu' }}
         run: |
           cargo install mdbook
+          mkdir -p target/release
+          ln -s ../${{ matrix.target }}/release/mdbook-typst-math target/release/mdbook-typst-math
           mdbook build example
       - name: Upload Artifact
         uses: actions/upload-artifact@v5
