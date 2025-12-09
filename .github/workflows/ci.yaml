@@ -79,7 +79,7 @@ jobs:
     if: ${{ github.event_name == 'push' }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Publish to Crates.io
         uses: katyo/publish-crates@v2
         with:
