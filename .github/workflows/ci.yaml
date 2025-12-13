@@ -63,7 +63,7 @@ jobs:
           ln -s ../${{ matrix.target }}/release/mdbook-typst-math target/release/mdbook-typst-math
           mdbook build example
       - name: Upload Artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: mdbook-typst-math-${{ matrix.target }}
           path: mdbook-typst-math-${{ matrix.target }}${{ matrix.suffix }}
@@ -96,7 +96,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/download-artifact@v6
+      - uses: actions/download-artifact@v7
         with:
           path: artifacts
           pattern: mdbook-typst-math-*
