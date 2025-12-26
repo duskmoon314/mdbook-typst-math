@@ -18,7 +18,7 @@ use typst::{
     },
     foundations::{Bytes, Datetime},
     layout::PagedDocument,
-    syntax::{package::PackageSpec, FileId, Lines, Source, Span},
+    syntax::{package::PackageSpec, FileId, Lines, Source, Span, VirtualPath},
     text::{Font, FontBook},
     utils::LazyHash,
     Library, LibraryExt, World, WorldExt,
@@ -110,11 +110,35 @@ impl Compiler {
     ///
     /// This creates a complete Typst world context for compilation,
     /// capturing the current local time for date-related functions.
-    pub fn wrap_source(&self, source: impl Into<String>) -> WrapSource<'_> {
+    ///
+    /// # Parameters
+    ///
+    /// - `source`: The Typst source code to compile
+    /// - `filename`: Optional filename to use in diagnostics (e.g., chapter name)
+    /// - `markdown_line`: The line number in the original markdown file (1-indexed)
+    /// - `preamble_lines`: Number of lines in the preamble before the actual content
+    pub fn wrap_source(
+        &self,
+        source: impl Into<String>,
+        filename: Option<&str>,
+        markdown_line: usize,
+        preamble_lines: usize,
+    ) -> WrapSource<'_> {
+        let source_str = source.into();
+        let source = if let Some(name) = filename {
+            let vpath = VirtualPath::new(name);
+            let file_id = FileId::new(None, vpath);
+            Source::new(file_id, source_str)
+        } else {
+            Source::detached(source_str)
+        };
+
         WrapSource {
             compiler: self,
-            source: Source::detached(source),
+            source,
             time: time::OffsetDateTime::now_local().unwrap_or(time::OffsetDateTime::now_utc()),
+            markdown_line,
+            preamble_lines,
         }
     }
 
@@ -258,6 +282,13 @@ impl Compiler {
     /// Compiles the given Typst source and returns the rendered pages
     /// as concatenated SVG strings.
     ///
+    /// # Parameters
+    ///
+    /// - `source`: The Typst source code to render
+    /// - `filename`: Optional filename to use in diagnostics (e.g., chapter name)
+    /// - `markdown_line`: The line number in the original markdown file (1-indexed)
+    /// - `preamble_lines`: Number of lines in the preamble before the actual content
+    ///
     /// # Errors
     ///
     /// Returns [`CompileError::Compilation`] if the Typst code fails to compile.
@@ -266,11 +297,17 @@ impl Compiler {
     ///
     /// ```ignore
     /// let compiler = Compiler::new();
-    /// let svg = compiler.render("$ E = m c^2 $")?;
+    /// let svg = compiler.render("$ E = m c^2 $", Some("chapter1.md"), 42, 1)?;
     /// ```
-    pub fn render(&self, source: impl Into<String>) -> Result<String, CompileError> {
+    pub fn render(
+        &self,
+        source: impl Into<String>,
+        filename: Option<&str>,
+        markdown_line: usize,
+        preamble_lines: usize,
+    ) -> Result<String, CompileError> {
         let source = source.into();
-        let world = self.wrap_source(source);
+        let world = self.wrap_source(source, filename, markdown_line, preamble_lines);
 
         let Warned { output, warnings } = typst::compile::<PagedDocument>(&world);
 
@@ -303,6 +340,10 @@ pub struct WrapSource<'a> {
     source: Source,
     /// The time to use for date-related Typst functions.
     time: time::OffsetDateTime,
+    /// The line number in the original markdown file where this block starts (1-indexed).
+    markdown_line: usize,
+    /// Number of lines in the preamble before the actual math content.
+    preamble_lines: usize,
 }
 
 impl WrapSource<'_> {
@@ -379,12 +420,21 @@ impl<'a> codespan_reporting::files::Files<'a> for WrapSource<'a> {
         byte_index: usize,
     ) -> Result<usize, codespan_reporting::files::Error> {
         let source = self.lookup(id);
-        source.byte_to_line(byte_index).ok_or_else(|| {
+        let typst_line = source.byte_to_line(byte_index).ok_or_else(|| {
             codespan_reporting::files::Error::IndexTooLarge {
                 given: byte_index,
                 max: source.len_bytes(),
             }
-        })
+        })?;
+
+        // Adjust line number to point to the original markdown file
+        if id == self.source.id() && typst_line >= self.preamble_lines {
+            // Line is in the actual content (after preamble)
+            // Both markdown_line and returned value are 0-indexed
+            Ok(self.markdown_line - 1 + (typst_line - self.preamble_lines))
+        } else {
+            Ok(typst_line)
+        }
     }
 
     fn line_range(
@@ -393,7 +443,16 @@ impl<'a> codespan_reporting::files::Files<'a> for WrapSource<'a> {
         line_index: usize,
     ) -> Result<std::ops::Range<usize>, codespan_reporting::files::Error> {
         let source = self.lookup(id);
-        source.line_to_range(line_index).ok_or_else(|| {
+
+        // Convert adjusted markdown line back to Typst line
+        let typst_line = if id == self.source.id() && line_index >= self.markdown_line - 1 {
+            // This is an adjusted line number, convert back to Typst line
+            self.preamble_lines + (line_index - (self.markdown_line - 1))
+        } else {
+            line_index
+        };
+
+        source.line_to_range(typst_line).ok_or_else(|| {
             codespan_reporting::files::Error::LineTooLarge {
                 given: line_index,
                 max: source.len_lines(),

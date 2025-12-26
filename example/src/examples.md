@@ -128,10 +128,10 @@ You will see a warning like this in the console:
 $ mdbook build
  INFO Book building has started
  WARN Typst: warning: unknown font family: nonexistent-font
-  ┌─ main.typ:7:20
-  │
-7 │     #set text(font: "nonexistent-font")
-  │                     ^^^^^^^^^^^^^^^^^^
+    ┌─ Examples examples.md:121:20
+    │
+121 │     #set text(font: "nonexistent-font")
+    │                     ^^^^^^^^^^^^^^^^^^
 
 
  INFO Running the html backend

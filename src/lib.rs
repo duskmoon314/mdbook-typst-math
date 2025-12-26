@@ -255,7 +255,12 @@ impl TypstProcessor {
     ) -> Result<String> {
         use pulldown_cmark::{Event, Options, Parser};
 
-        let chapter_name = chapter.name.as_str();
+        // Construct filename from chapter name and source path
+        let filename = if let Some(ref path) = chapter.source_path {
+            format!("{} {}", chapter.name, path.display())
+        } else {
+            chapter.name.clone()
+        };
         let mut typst_blocks = Vec::new();
 
         let mut pulldown_cmark_opts = Options::empty();
@@ -269,24 +274,22 @@ impl TypstProcessor {
         for (e, span) in parser.into_offset_iter() {
             match e {
                 Event::InlineMath(math_content) => {
+                    let preamble = opts.inline_preamble.as_ref().unwrap_or(&opts.preamble);
                     typst_blocks.push((
-                        span,
-                        format!(
-                            "{}\n${math_content}$",
-                            opts.inline_preamble.as_ref().unwrap_or(&opts.preamble)
-                        ),
+                        span.clone(),
+                        format!("{}\n${math_content}$", preamble),
                         true,
+                        preamble.lines().count(), // preamble line count
                     ));
                 }
                 Event::DisplayMath(math_content) => {
                     let math_content = math_content.trim();
+                    let preamble = opts.display_preamble.as_ref().unwrap_or(&opts.preamble);
                     typst_blocks.push((
-                        span,
-                        format!(
-                            "{}\n$ {math_content} $",
-                            opts.display_preamble.as_ref().unwrap_or(&opts.preamble)
-                        ),
+                        span.clone(),
+                        format!("{}\n$ {math_content} $", preamble),
                         false,
+                        preamble.lines().count(), // preamble line count
                     ));
                 }
                 // TODO: we might want to support code block with lang "typst"?
@@ -297,13 +300,23 @@ impl TypstProcessor {
 
         let mut content = chapter.content.to_string();
 
-        for (span, block, inline) in typst_blocks.iter().rev() {
+        for (span, block, inline, preamble_lines) in typst_blocks.iter().rev() {
             let pre_content = &content[0..span.start];
             let post_content = &content[span.end..];
 
-            let mut svg = compiler.render(block.clone()).map_err(|e: CompileError| {
-                anyhow!("Failed to render math in chapter '{}': {}", chapter_name, e)
-            })?;
+            // Calculate the line number in the original markdown
+            let markdown_line = chapter.content[..span.start].lines().count() + 1;
+
+            let mut svg = compiler
+                .render(
+                    block.clone(),
+                    Some(&filename),
+                    markdown_line,
+                    *preamble_lines,
+                )
+                .map_err(|e: CompileError| {
+                    anyhow!("Failed to render math in chapter '{}': {}", filename, e)
+                })?;
 
             // Apply color mode transformation
             if opts.color_mode == ColorMode::Auto {
