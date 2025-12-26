@@ -28,23 +28,23 @@ clap = { version = "4.5.53", features = ["derive"] }
 codespan-reporting = "0.13.1"
 flate2 = "1.1.5"
 fontdb = "0.23.0"
-mdbook-preprocessor = "0.5.1"
+mdbook-preprocessor = "0.5.2"
 pathdiff = "0.2.3"
 pulldown-cmark = "0.13.0"
-reqwest = { version = "0.12.24", default-features = false, features = [
+reqwest = { version = "0.12.28", default-features = false, features = [
     "blocking",
     "rustls-tls",
 ] }
 serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0.145"
+serde_json = "1.0.147"
 tar = "0.4.44"
 time = { version = "0.3.44", features = ["local-offset"] }
-tracing = "0.1.43"
+tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
-typst = "0.14.1"
-typst-assets = { version = "0.14.1", features = ["fonts"], optional = true }
-typst-html = "0.14.1"
-typst-svg = "0.14.1"
+typst = "0.14.2"
+typst-assets = { version = "0.14.2", features = ["fonts"], optional = true }
+typst-html = "0.14.2"
+typst-svg = "0.14.2"
 
 [features]
 default = ["embed-fonts"]
