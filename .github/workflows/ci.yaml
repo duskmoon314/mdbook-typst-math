@@ -58,7 +58,7 @@ jobs:
       - name: Build example book to test
         if: ${{ matrix.os == 'ubuntu-latest' && matrix.target == 'x86_64-unknown-linux-gnu' }}
         run: |
-          cargo install mdbook
+          command -v mdbook || cargo install mdbook
           mkdir -p target/release
           ln -s ../${{ matrix.target }}/release/mdbook-typst-math target/release/mdbook-typst-math
           mdbook build example
