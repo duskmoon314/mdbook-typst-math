@@ -31,7 +31,7 @@ fontdb = "0.23.0"
 mdbook-preprocessor = "0.5.2"
 pathdiff = "0.2.3"
 pulldown-cmark = "0.13.0"
-reqwest = { version = "0.12.28", default-features = false, features = [
+reqwest = { version = "0.13.0", default-features = false, features = [
     "blocking",
     "rustls-tls",
 ] }
