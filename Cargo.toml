@@ -29,7 +29,6 @@ codespan-reporting = "0.13.1"
 flate2 = "1.1.5"
 fontdb = "0.23.0"
 mdbook-preprocessor = "0.5.2"
-pathdiff = "0.2.3"
 pulldown-cmark = "0.13.0"
 reqwest = { version = "0.12.28", default-features = false, features = [
     "blocking",
