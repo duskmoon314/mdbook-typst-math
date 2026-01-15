@@ -155,6 +155,62 @@ $$
 y = f(x)
 $$
 
+### Rendering Typst with fenced code blocks
+
+In addition to math blocks, you can render arbitrary Typst content using fenced code blocks:
+
+````markdown
+```typst,render
+#set text(fill: blue)
+*Hello from Typst!*
+```
+````
+
+This allows you to use Typst's full capabilities beyond math mode, including:
+- Diagrams with packages like cetz
+- Tables and layouts
+- Formatted text with custom styling
+- Any other Typst features
+
+Code blocks are also rendered using the `display_preamble` (or `preamble` if not set) and wrapped in `<div class="typst-display">`.
+
+### Using Typst Packages
+
+This preprocessor supports Typst packages from [Typst Universe](https://typst.app/universe).
+Packages are automatically downloaded and cached when first used.
+
+To use a package like [physica](https://typst.app/universe/package/physica), add the import to your preamble:
+
+```toml
+[preprocessor.typst-math]
+cache = ".typst-cache"
+preamble = """
+#set page(width:auto, height:auto, margin:0.5em)
+#import "@preview/physica:0.9.7": *
+"""
+```
+
+Then you can use the package features in your math blocks:
+
+```markdown
+The derivative is $dv(f,x)$ and the partial derivative is $pdv(f,x,y)$.
+
+$$
+grad f = vu(x) pdv(f,x) + vu(y) pdv(f,y)
+$$
+```
+
+$$
+grad f = vu(x) pdv(f,x) + vu(y) pdv(f,y)
+$$
+
+> **Note:** Make sure to set the `cache` option to specify where downloaded packages should be stored. You may want to add this directory to your `.gitignore`.
+>
+> You may also want to re-use the same cache directory as your Typst installation by setting `cache` to:
+> - `$XDG_CACHE_HOME/typst/packages` or `~/.cache/typst/packages` on Linux
+> - `~/Library/Caches/typst/packages` on macOS
+> - `%LOCALAPPDATA%\typst\packages` on Windows
+
 ### Configuration
 
 Currently, only following configurations are supported. Here we use an example to show how to set them:
@@ -229,41 +285,21 @@ cache = ".typst-cache"
 # - "static": Keep colors as-is from Typst output. Use this if you want to
 #   preserve exact colors or use a fixed background color.
 color_mode = "auto"
+
+# Code block language tag for rendering Typst code blocks
+#
+# By default, code blocks with the language tag `typst,render` are rendered.
+# You can customize this to use a different tag.
+code_tag = "typst,render"
 ````
 
-### Using Typst Packages
+## Contributing
 
-This preprocessor supports Typst packages from [Typst Universe](https://typst.app/universe).
-Packages are automatically downloaded and cached when first used.
+Contributions are welcome! Please open issues or pull requests with:
 
-To use a package like [physica](https://typst.app/universe/package/physica), add the import to your preamble:
+- Bug reports
+- Feature requests
+- Documentation improvements
+- Any other contributions
 
-```toml
-[preprocessor.typst-math]
-cache = ".typst-cache"
-preamble = """
-#set page(width:auto, height:auto, margin:0.5em)
-#import "@preview/physica:0.9.7": *
-"""
-```
-
-Then you can use the package features in your math blocks:
-
-```markdown
-The derivative is $dv(f,x)$ and the partial derivative is $pdv(f,x,y)$.
-
-$$
-grad f = vu(x) pdv(f,x) + vu(y) pdv(f,y)
-$$
-```
-
-$$
-grad f = vu(x) pdv(f,x) + vu(y) pdv(f,y)
-$$
-
-> **Note:** Make sure to set the `cache` option to specify where downloaded packages should be stored. You may want to add this directory to your `.gitignore`.
->
-> You may also want to re-use the same cache directory as your Typst installation by setting `cache` to:
-> - `$XDG_CACHE_HOME/typst/packages` or `~/.cache/typst/packages` on Linux
-> - `~/Library/Caches/typst/packages` on macOS
-> - `%LOCALAPPDATA%\typst\packages` on Windows
+If you use this preprocessor in your mdBook projects, please consider sharing your experience or examples.

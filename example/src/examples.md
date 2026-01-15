@@ -102,6 +102,76 @@ $$
 
 > Since the code is still wrapped in a math block, the output might not be as expected. In addition, empty lines inside `#[]` may cause issues in markdown parsing. **Use this feature with caution!**
 
+## Rendering Typst Code Blocks
+
+A better way to render non-math Typst content is to use fenced code blocks with the `typst,render` language tag. This gives you full access to Typst's capabilities without the limitations of math mode.
+
+### Basic Text Formatting
+
+````markdown
+```typst,render
+#set text(fill: blue, size: 14pt)
+*Hello* from _Typst_!
+
+This is a paragraph with *bold* and _italic_ text.
+```
+````
+
+```typst,render
+#set text(fill: blue, size: 14pt)
+*Hello* from _Typst_!
+
+This is a paragraph with *bold* and _italic_ text.
+```
+
+### Tables
+
+````markdown
+```typst,render
+#table(
+  columns: 3,
+  [Name], [Age], [City],
+  [Alice], [25], [New York],
+  [Bob], [30], [London],
+  [Charlie], [35], [Tokyo],
+)
+```
+````
+
+```typst,render
+#table(
+  columns: 3,
+  [Name], [Age], [City],
+  [Alice], [25], [New York],
+  [Bob], [30], [London],
+  [Charlie], [35], [Tokyo],
+)
+```
+
+### Diagrams
+
+You can use packages like cetz to create diagrams:
+
+````markdown
+```typst,render
+#cetz.canvas({
+  import cetz.draw: *
+  circle((0, 0), radius: 1)
+  line((-1, -1), (1, 1))
+  line((-1, 1), (1, -1))
+})
+```
+````
+
+```typst,render
+#cetz.canvas({
+  import cetz.draw: *
+  circle((0, 0), radius: 1)
+  line((-1, -1), (1, 1))
+  line((-1, 1), (1, -1))
+})
+```
+
 ## Typst's warnings and errors
 
 Typst's warnings and errors will be shown in the console output when building the book.

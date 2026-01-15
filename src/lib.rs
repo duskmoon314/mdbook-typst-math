@@ -21,6 +21,7 @@
 //! - `fonts`: List of font directories to load
 //! - `cache`: Directory for caching downloaded packages
 //! - `color_mode`: Color mode for SVG output (`auto` or `static`)
+//! - `code_tag`: Language tag for code blocks to render as Typst (default: `typst,render`)
 
 use std::path::PathBuf;
 
@@ -59,6 +60,8 @@ pub struct TypstProcessorOptions {
     /// with `currentColor`, allowing CSS to control the text color for
     /// theme support (light/dark mode).
     pub color_mode: ColorMode,
+    /// Language tag for code blocks to render as Typst.
+    pub code_tag: String,
 }
 
 /// Color mode for SVG output.
@@ -121,6 +124,10 @@ struct TypstMathConfig {
     cache: Option<String>,
     #[serde(default)]
     color_mode: ColorMode,
+
+    /// Language tag for code blocks to render as Typst.
+    /// Defaults to "typst,render" if not specified.
+    code_tag: Option<String>,
 }
 
 /// The main preprocessor that converts math blocks to Typst-rendered SVGs.
@@ -162,6 +169,9 @@ impl Preprocessor for TypstProcessor {
             inline_preamble: config.inline_preamble,
             display_preamble: config.display_preamble,
             color_mode: config.color_mode,
+            code_tag: config
+                .code_tag
+                .unwrap_or_else(|| String::from("typst,render")),
         };
 
         let mut db = fontdb::Database::new();
@@ -253,7 +263,7 @@ impl TypstProcessor {
         compiler: &Compiler,
         opts: &TypstProcessorOptions,
     ) -> Result<String> {
-        use pulldown_cmark::{Event, Options, Parser};
+        use pulldown_cmark::{CodeBlockKind, Event, Options, Parser, Tag, TagEnd};
 
         // Construct filename from chapter name and source path
         let filename = if let Some(ref path) = chapter.source_path {
@@ -269,6 +279,10 @@ impl TypstProcessor {
         pulldown_cmark_opts.insert(Options::ENABLE_STRIKETHROUGH);
         pulldown_cmark_opts.insert(Options::ENABLE_TASKLISTS);
         pulldown_cmark_opts.insert(Options::ENABLE_MATH);
+
+        let mut in_typst_code_block = false;
+        let mut code_block_start: Option<std::ops::Range<usize>> = None;
+        let mut code_block_content = String::new();
 
         let parser = Parser::new_ext(&chapter.content, pulldown_cmark_opts);
         for (e, span) in parser.into_offset_iter() {
@@ -292,8 +306,31 @@ impl TypstProcessor {
                         preamble.lines().count(), // preamble line count
                     ));
                 }
-                // TODO: we might want to support code block with lang "typst"?
-                // Then non-math typst content could be rendered without hacking around
+                Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(lang))) => {
+                    if lang.as_ref() == opts.code_tag.as_str() {
+                        in_typst_code_block = true;
+                        code_block_start = Some(span.clone());
+                        code_block_content.clear();
+                    }
+                }
+                Event::Text(text) if in_typst_code_block => {
+                    code_block_content.push_str(&text);
+                }
+                Event::End(TagEnd::CodeBlock) if in_typst_code_block => {
+                    if let Some(start_span) = code_block_start.take() {
+                        let preamble = opts.display_preamble.as_ref().unwrap_or(&opts.preamble);
+                        let full_span = start_span.start..span.end;
+
+                        typst_blocks.push((
+                            full_span,
+                            format!("{}\n{}", preamble, code_block_content.trim()),
+                            false, // Display mode
+                            preamble.lines().count(),
+                        ));
+                    }
+                    in_typst_code_block = false;
+                    code_block_content.clear();
+                }
                 _ => {}
             }
         }
