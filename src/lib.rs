@@ -22,6 +22,8 @@
 //! - `cache`: Directory for caching downloaded packages
 //! - `color_mode`: Color mode for SVG output (`auto` or `static`)
 //! - `code_tag`: Language tag for code blocks to render as Typst (default: `typst,render`)
+//! - `enable_math`: Enable rendering of math blocks (default: `true`)
+//! - `enable_code`: Enable rendering of Typst code blocks (default: `true`)
 
 use std::path::PathBuf;
 
@@ -62,6 +64,10 @@ pub struct TypstProcessorOptions {
     pub color_mode: ColorMode,
     /// Language tag for code blocks to render as Typst.
     pub code_tag: String,
+    /// Enable rendering of math blocks (inline and display math).
+    pub enable_math: bool,
+    /// Enable rendering of Typst code blocks.
+    pub enable_code: bool,
 }
 
 /// Color mode for SVG output.
@@ -128,6 +134,14 @@ struct TypstMathConfig {
     /// Language tag for code blocks to render as Typst.
     /// Defaults to "typst,render" if not specified.
     code_tag: Option<String>,
+
+    /// Enable rendering of math blocks (inline and display math).
+    /// Defaults to true if not specified.
+    enable_math: Option<bool>,
+
+    /// Enable rendering of Typst code blocks.
+    /// Defaults to true if not specified.
+    enable_code: Option<bool>,
 }
 
 /// The main preprocessor that converts math blocks to Typst-rendered SVGs.
@@ -172,6 +186,8 @@ impl Preprocessor for TypstProcessor {
             code_tag: config
                 .code_tag
                 .unwrap_or_else(|| String::from("typst,render")),
+            enable_math: config.enable_math.unwrap_or(true),
+            enable_code: config.enable_code.unwrap_or(true),
         };
 
         let mut db = fontdb::Database::new();
@@ -287,7 +303,7 @@ impl TypstProcessor {
         let parser = Parser::new_ext(&chapter.content, pulldown_cmark_opts);
         for (e, span) in parser.into_offset_iter() {
             match e {
-                Event::InlineMath(math_content) => {
+                Event::InlineMath(math_content) if opts.enable_math => {
                     let preamble = opts.inline_preamble.as_ref().unwrap_or(&opts.preamble);
                     typst_blocks.push((
                         span.clone(),
@@ -296,7 +312,7 @@ impl TypstProcessor {
                         preamble.lines().count(), // preamble line count
                     ));
                 }
-                Event::DisplayMath(math_content) => {
+                Event::DisplayMath(math_content) if opts.enable_math => {
                     let math_content = math_content.trim();
                     let preamble = opts.display_preamble.as_ref().unwrap_or(&opts.preamble);
                     typst_blocks.push((
@@ -306,17 +322,17 @@ impl TypstProcessor {
                         preamble.lines().count(), // preamble line count
                     ));
                 }
-                Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(lang))) => {
+                Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(lang))) if opts.enable_code => {
                     if lang.as_ref() == opts.code_tag.as_str() {
                         in_typst_code_block = true;
                         code_block_start = Some(span.clone());
                         code_block_content.clear();
                     }
                 }
-                Event::Text(text) if in_typst_code_block => {
+                Event::Text(text) if in_typst_code_block && opts.enable_code => {
                     code_block_content.push_str(&text);
                 }
-                Event::End(TagEnd::CodeBlock) if in_typst_code_block => {
+                Event::End(TagEnd::CodeBlock) if in_typst_code_block && opts.enable_code => {
                     if let Some(start_span) = code_block_start.take() {
                         let preamble = opts.display_preamble.as_ref().unwrap_or(&opts.preamble);
                         let full_span = start_span.start..span.end;

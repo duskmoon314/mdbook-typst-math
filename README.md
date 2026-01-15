@@ -291,6 +291,16 @@ color_mode = "auto"
 # By default, code blocks with the language tag `typst,render` are rendered.
 # You can customize this to use a different tag.
 code_tag = "typst,render"
+
+# Enable rendering of math blocks (inline and display math)
+#
+# Set to false to disable math block rendering. Defaults to true.
+enable_math = true
+
+# Enable rendering of Typst code blocks
+#
+# Set to false to disable code block rendering. Defaults to true.
+enable_code = true
 ````
 
 ## Contributing
