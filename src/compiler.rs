@@ -161,11 +161,7 @@ impl Compiler {
         );
 
         let mut response = reqwest::blocking::get(package_url).map_err(|e| {
-            PackageError::NetworkFailed(Some(eco_format!(
-                "Failed to download package {}: {}",
-                package.name,
-                e
-            )))
+            PackageError::NetworkFailed(Some(eco_format!("{}: {}", package.name, e)))
         })?;
 
         let mut compressed = Vec::new();
