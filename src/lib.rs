@@ -194,7 +194,18 @@ impl Preprocessor for TypstProcessor {
         // Load fonts from the config
         if let Some(fonts) = config.fonts {
             for font_path in fonts.into_vec() {
-                db.load_fonts_dir(font_path);
+                let path = std::path::Path::new(&font_path);
+                if path.is_file() {
+                    // Load single font file
+                    if let Err(e) = db.load_font_file(&font_path) {
+                        eprintln!("Warning: Failed to load font file {:?}: {}", font_path, e);
+                    }
+                } else if path.is_dir() {
+                    // Load all fonts from directory
+                    db.load_fonts_dir(&font_path);
+                } else {
+                    eprintln!("Warning: Font path does not exist: {:?}", font_path);
+                }
             }
         }
         // Load system fonts, lower priority
