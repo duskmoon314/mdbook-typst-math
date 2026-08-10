@@ -27,7 +27,7 @@ anyhow = "1.0.100"
 clap = { version = "4.5.54", features = ["derive"] }
 codespan-reporting = "0.13.1"
 flate2 = "1.1.8"
-fontdb = "0.23.0"
+fontdb = "0.24.0"
 mdbook-preprocessor = "0.5.2"
 pulldown-cmark = "0.13.0"
 reqwest = { version = "0.13.1", features = ["blocking"] }
