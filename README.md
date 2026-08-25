@@ -216,15 +216,16 @@ $$
 Currently, only following configurations are supported. Here we use an example to show how to set them:
 
 ````toml
-[preprocessor.typst]
+[preprocessor.typst-math]
 
-# Additional fonts to load
-#
-# Two types are supported: a string or an array of strings
-#
-# Usually, you don't need to set this since the default build of preprocessor
-# will load system fonts and typst embedded fonts.
-fonts = ["/path/to/FiraMath-Regular.otf"] # or "/path/to/FiraMath-Regular.otf"
+# Additional font files or directories to load.
+# A string or an array of strings is accepted.
+fonts = ["/path/to/FiraMath-Regular.otf", "/path/to/fonts"]
+
+# Search platform system-font directories. Defaults to true.
+# Embedded fallback fonts remain available when the binary is built with the
+# default `embed-fonts` Cargo feature.
+include_system_fonts = true
 
 # Preamble to be added before the typst code
 #

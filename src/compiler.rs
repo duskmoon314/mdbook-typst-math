@@ -23,6 +23,7 @@ use typst::{
     utils::LazyHash,
     Library, LibraryExt, World, WorldExt,
 };
+use typst_kit::fonts::FontSlot;
 use typst_svg::svg;
 
 /// Errors that can occur during Typst compilation.
@@ -57,6 +58,23 @@ struct CachedFile {
     source: Option<Source>,
 }
 
+/// A font supplied either by typst-kit's lazy search or as an explicit file.
+pub enum FontSource {
+    /// A font loaded on first use.
+    Lazy(FontSlot),
+    /// An explicitly configured font file, parsed during initialization.
+    Loaded(Font),
+}
+
+impl FontSource {
+    fn get(&self) -> Option<Font> {
+        match self {
+            Self::Lazy(slot) => slot.get(),
+            Self::Loaded(font) => Some(font.clone()),
+        }
+    }
+}
+
 /// The Typst compiler context.
 ///
 /// This struct holds all the state needed to compile Typst documents:
@@ -76,8 +94,8 @@ pub struct Compiler {
     pub library: LazyHash<Library>,
     /// Font metadata book for font selection.
     pub book: LazyHash<FontBook>,
-    /// Loaded font data.
-    pub fonts: Vec<Font>,
+    /// Configured fonts and lazy slots in the same order as `book`.
+    pub fonts: Vec<FontSource>,
     /// Cache directory for downloaded packages.
     pub cache: PathBuf,
     /// Internal file cache for sources and binary files.
@@ -380,7 +398,7 @@ impl World for WrapSource<'_> {
     }
 
     fn font(&self, index: usize) -> Option<Font> {
-        self.compiler.fonts.get(index).cloned()
+        self.compiler.fonts.get(index)?.get()
     }
 
     fn today(&self, _offset: Option<i64>) -> Option<Datetime> {
