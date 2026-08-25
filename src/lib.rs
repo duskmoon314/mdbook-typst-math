@@ -18,7 +18,8 @@
 //! - `preamble`: Typst code to prepend to all math blocks
 //! - `inline_preamble`: Typst code to prepend to inline math blocks
 //! - `display_preamble`: Typst code to prepend to display math blocks
-//! - `fonts`: List of font directories to load
+//! - `fonts`: List of font files or directories to load
+//! - `include_system_fonts`: Search system font directories (default: `true`)
 //! - `cache`: Directory for caching downloaded packages
 //! - `color_mode`: Color mode for SVG output (`auto` or `static`)
 //! - `code_tag`: Language tag for code blocks to render as Typst (default: `typst,render`)
@@ -34,9 +35,10 @@ use mdbook_preprocessor::{Preprocessor, PreprocessorContext};
 use serde::Deserialize;
 
 mod compiler;
-use compiler::{CompileError, Compiler};
+use compiler::{CompileError, Compiler, FontSource};
 use typst::foundations::Bytes;
-use typst::text::{Font, FontInfo};
+use typst::text::{Font, FontBook};
+use typst_kit::fonts::FontSearcher;
 
 /// Options that control how Typst renders math blocks.
 ///
@@ -110,6 +112,22 @@ impl FontsConfig {
     }
 }
 
+fn extend_searched_fonts(
+    book: &mut FontBook,
+    fonts: &mut Vec<FontSource>,
+    searched: typst_kit::fonts::Fonts,
+) {
+    for (index, slot) in searched.fonts.into_iter().enumerate() {
+        let info = searched
+            .book
+            .info(index)
+            .expect("font book and slots must have matching indices")
+            .clone();
+        book.push(info);
+        fonts.push(FontSource::Lazy(slot));
+    }
+}
+
 /// Configuration for the typst-math preprocessor from book.toml
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(default)]
@@ -123,8 +141,11 @@ struct TypstMathConfig {
     /// Optional preamble for display math blocks.
     display_preamble: Option<String>,
 
-    /// Custom fonts to load
+    /// Custom font files or directories to load.
     fonts: Option<FontsConfig>,
+
+    /// Whether to search system font directories. Defaults to true.
+    include_system_fonts: Option<bool>,
 
     /// Cache directory for downloaded packages
     cache: Option<String>,
@@ -190,70 +211,53 @@ impl Preprocessor for TypstProcessor {
             enable_code: config.enable_code.unwrap_or(true),
         };
 
-        let mut db = fontdb::Database::new();
-        // Load fonts from the config
+        let mut font_book = FontBook::new();
+        let mut font_sources = Vec::new();
+
+        // Keep configured paths in priority order. Explicit files are expected
+        // to be few and remain eagerly parsed; directories use lazy slots.
         if let Some(fonts) = config.fonts {
             for font_path in fonts.into_vec() {
                 let path = std::path::Path::new(&font_path);
                 if path.is_file() {
-                    // Load single font file
-                    if let Err(e) = db.load_font_file(&font_path) {
-                        eprintln!("Warning: Failed to load font file {:?}: {}", font_path, e);
+                    match std::fs::read(path) {
+                        Ok(data) => {
+                            let before = font_sources.len();
+                            for font in Font::iter(Bytes::new(data)) {
+                                font_book.push(font.info().clone());
+                                font_sources.push(FontSource::Loaded(font));
+                            }
+                            if font_sources.len() == before {
+                                eprintln!("Warning: Failed to parse font file {:?}", font_path);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Warning: Failed to load font file {:?}: {}", font_path, e);
+                        }
                     }
                 } else if path.is_dir() {
-                    // Load all fonts from directory
-                    db.load_fonts_dir(&font_path);
+                    let mut searcher = FontSearcher::new();
+                    searcher.include_system_fonts(false);
+                    #[cfg(feature = "embed-fonts")]
+                    searcher.include_embedded_fonts(false);
+                    extend_searched_fonts(
+                        &mut font_book,
+                        &mut font_sources,
+                        searcher.search_with([path]),
+                    );
                 } else {
                     eprintln!("Warning: Font path does not exist: {:?}", font_path);
                 }
             }
         }
-        // Load system fonts, lower priority
-        db.load_system_fonts();
 
-        // Add all fonts in db to the compiler
-        for face in db.faces() {
-            let Some(info) = db.with_face_data(face.id, FontInfo::new).flatten() else {
-                eprintln!(
-                    "Warning: Failed to load font info for {:?}, skipping",
-                    face.source
-                );
-                continue;
-            };
-            compiler.book.push(info);
-            let font = match &face.source {
-                fontdb::Source::File(path) | fontdb::Source::SharedFile(path, _) => {
-                    match std::fs::read(path) {
-                        Ok(bytes) => Font::new(Bytes::new(bytes), face.index),
-                        Err(e) => {
-                            eprintln!(
-                                "Warning: Failed to read font file {:?}: {}, skipping",
-                                path, e
-                            );
-                            continue;
-                        }
-                    }
-                }
-                fontdb::Source::Binary(data) => {
-                    Font::new(Bytes::new(data.as_ref().as_ref().to_vec()), face.index)
-                }
-            };
-            if let Some(font) = font {
-                compiler.fonts.push(font);
-            }
-        }
+        // System and embedded fonts have lower priority than configured paths.
+        let mut searcher = FontSearcher::new();
+        searcher.include_system_fonts(config.include_system_fonts.unwrap_or(true));
+        extend_searched_fonts(&mut font_book, &mut font_sources, searcher.search());
 
-        #[cfg(feature = "embed-fonts")]
-        {
-            // Load typst embedded fonts, lowest priority
-            for data in typst_assets::fonts() {
-                let buffer = Bytes::new(data);
-                for font in Font::iter(buffer) {
-                    compiler.book.push(font.info().clone());
-                    compiler.fonts.push(font);
-                }
-            }
-        }
+        compiler.book = typst::utils::LazyHash::new(font_book);
+        compiler.fonts = font_sources;
 
         // Set the cache dir
         if let Some(ref cache) = config.cache {
