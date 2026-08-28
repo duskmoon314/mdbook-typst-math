@@ -35,10 +35,10 @@ use mdbook_preprocessor::{Preprocessor, PreprocessorContext};
 use serde::Deserialize;
 
 mod compiler;
-use compiler::{CompileError, Compiler, FontSource};
+use compiler::{CompileError, Compiler};
 use typst::foundations::Bytes;
-use typst::text::{Font, FontBook};
-use typst_kit::fonts::FontSearcher;
+use typst::text::Font;
+use typst_kit::fonts::FontStore;
 
 /// Options that control how Typst renders math blocks.
 ///
@@ -109,22 +109,6 @@ impl FontsConfig {
             FontsConfig::Single(s) => vec![s],
             FontsConfig::Multiple(v) => v,
         }
-    }
-}
-
-fn extend_searched_fonts(
-    book: &mut FontBook,
-    fonts: &mut Vec<FontSource>,
-    searched: typst_kit::fonts::Fonts,
-) {
-    for (index, slot) in searched.fonts.into_iter().enumerate() {
-        let info = searched
-            .book
-            .info(index)
-            .expect("font book and slots must have matching indices")
-            .clone();
-        book.push(info);
-        fonts.push(FontSource::Lazy(slot));
     }
 }
 
@@ -211,23 +195,22 @@ impl Preprocessor for TypstProcessor {
             enable_code: config.enable_code.unwrap_or(true),
         };
 
-        let mut font_book = FontBook::new();
-        let mut font_sources = Vec::new();
+        let mut font_store = FontStore::new();
 
         // Keep configured paths in priority order. Explicit files are expected
-        // to be few and remain eagerly parsed; directories use lazy slots.
+        // to be few and remain eagerly parsed; directories use lazy sources.
         if let Some(fonts) = config.fonts {
             for font_path in fonts.into_vec() {
                 let path = std::path::Path::new(&font_path);
                 if path.is_file() {
                     match std::fs::read(path) {
                         Ok(data) => {
-                            let before = font_sources.len();
+                            let mut loaded = false;
                             for font in Font::iter(Bytes::new(data)) {
-                                font_book.push(font.info().clone());
-                                font_sources.push(FontSource::Loaded(font));
+                                loaded = true;
+                                font_store.push((font.clone(), font.info().clone()));
                             }
-                            if font_sources.len() == before {
+                            if !loaded {
                                 eprintln!("Warning: Failed to parse font file {:?}", font_path);
                             }
                         }
@@ -236,15 +219,7 @@ impl Preprocessor for TypstProcessor {
                         }
                     }
                 } else if path.is_dir() {
-                    let mut searcher = FontSearcher::new();
-                    searcher.include_system_fonts(false);
-                    #[cfg(feature = "embed-fonts")]
-                    searcher.include_embedded_fonts(false);
-                    extend_searched_fonts(
-                        &mut font_book,
-                        &mut font_sources,
-                        searcher.search_with([path]),
-                    );
+                    font_store.extend(typst_kit::fonts::scan(path));
                 } else {
                     eprintln!("Warning: Font path does not exist: {:?}", font_path);
                 }
@@ -252,12 +227,17 @@ impl Preprocessor for TypstProcessor {
         }
 
         // System and embedded fonts have lower priority than configured paths.
-        let mut searcher = FontSearcher::new();
-        searcher.include_system_fonts(config.include_system_fonts.unwrap_or(true));
-        extend_searched_fonts(&mut font_book, &mut font_sources, searcher.search());
+        if config.include_system_fonts.unwrap_or(true) {
+            font_store.extend(typst_kit::fonts::system());
+        }
+        #[cfg(feature = "embed-fonts")]
+        font_store.extend(typst_kit::fonts::embedded());
 
-        compiler.book = typst::utils::LazyHash::new(font_book);
-        compiler.fonts = font_sources;
+        // Move the configured store into the compiler after adding all
+        // sources. The book is cloned because `Compiler` keeps its public
+        // metadata field while `FontStore` owns the lazy slots.
+        compiler.book = font_store.book().clone();
+        compiler.fonts = font_store;
 
         // Set the cache dir
         if let Some(ref cache) = config.cache {

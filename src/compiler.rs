@@ -16,15 +16,17 @@ use typst::{
     diag::{
         eco_format, FileError, FileResult, PackageError, PackageResult, SourceDiagnostic, Warned,
     },
-    foundations::{Bytes, Datetime},
-    layout::PagedDocument,
-    syntax::{package::PackageSpec, FileId, Lines, Source, Span, VirtualPath},
+    foundations::{Bytes, Datetime, Duration},
+    syntax::{
+        package::PackageSpec, DiagSpan, FileId, Lines, RootedPath, Source, VirtualPath, VirtualRoot,
+    },
     text::{Font, FontBook},
     utils::LazyHash,
     Library, LibraryExt, World, WorldExt,
 };
-use typst_kit::fonts::FontSlot;
-use typst_svg::svg;
+use typst_kit::fonts::FontStore;
+use typst_layout::PagedDocument;
+use typst_svg::{svg, SvgOptions};
 
 /// Errors that can occur during Typst compilation.
 #[derive(Debug)]
@@ -58,23 +60,6 @@ struct CachedFile {
     source: Option<Source>,
 }
 
-/// A font supplied either by typst-kit's lazy search or as an explicit file.
-pub enum FontSource {
-    /// A font loaded on first use.
-    Lazy(FontSlot),
-    /// An explicitly configured font file, parsed during initialization.
-    Loaded(Font),
-}
-
-impl FontSource {
-    fn get(&self) -> Option<Font> {
-        match self {
-            Self::Lazy(slot) => slot.get(),
-            Self::Loaded(font) => Some(font.clone()),
-        }
-    }
-}
-
 /// The Typst compiler context.
 ///
 /// This struct holds all the state needed to compile Typst documents:
@@ -95,7 +80,7 @@ pub struct Compiler {
     /// Font metadata book for font selection.
     pub book: LazyHash<FontBook>,
     /// Configured fonts and lazy slots in the same order as `book`.
-    pub fonts: Vec<FontSource>,
+    pub fonts: FontStore,
     /// Cache directory for downloaded packages.
     pub cache: PathBuf,
     /// Internal file cache for sources and binary files.
@@ -107,7 +92,7 @@ impl Default for Compiler {
         Self {
             library: LazyHash::new(Library::default()),
             book: LazyHash::new(FontBook::default()),
-            fonts: Vec::new(),
+            fonts: FontStore::new(),
             cache: PathBuf::new(),
             files: RwLock::new(HashMap::new()),
         }
@@ -144,8 +129,14 @@ impl Compiler {
     ) -> WrapSource<'_> {
         let source_str = source.into();
         let source = if let Some(name) = filename {
-            let vpath = VirtualPath::new(name);
-            let file_id = FileId::new(None, vpath);
+            // Typst virtual paths use forward slashes and reject paths that
+            // escape the project root. Chapter names and Windows paths can
+            // contain backslashes, so normalize them before interning.
+            let normalized = name.replace('\\', "/");
+            let vpath = VirtualPath::new(normalized).unwrap_or_else(|_| {
+                VirtualPath::new("main.typ").expect("a static Typst path must be valid")
+            });
+            let file_id = RootedPath::new(VirtualRoot::Project, vpath).intern();
             Source::new(file_id, source_str)
         } else {
             Source::detached(source_str)
@@ -239,11 +230,12 @@ impl Compiler {
         }
 
         // File not cached, try to load it
-        if let Some(package) = id.package() {
+        if let VirtualRoot::Package(package) = id.root() {
             let package_dir = self.package(package)?;
-            let Some(path) = id.vpath().resolve(&package_dir) else {
-                return Err(FileError::NotFound(id.vpath().as_rootless_path().into()));
-            };
+            let path = id
+                .vpath()
+                .realize(&package_dir)
+                .map_err(|_| FileError::NotFound(id.vpath().get_without_slash().into()))?;
             let contents = std::fs::read(&path).map_err(|e| FileError::from_io(e, &path))?;
             let bytes = Bytes::new(contents);
 
@@ -258,7 +250,7 @@ impl Compiler {
             return Ok(bytes);
         }
 
-        Err(FileError::NotFound(id.vpath().as_rootless_path().into()))
+        Err(FileError::NotFound(id.vpath().get_without_slash().into()))
     }
 
     /// Gets a parsed source file, loading and caching if necessary.
@@ -328,8 +320,25 @@ impl Compiler {
         match output {
             Ok(document) => {
                 print_diagnostics(&world, &warnings, &[])?;
-                let images = document.pages.iter().map(svg).collect::<Vec<_>>();
-                let images = images.join("\n");
+                let options = SvgOptions::default();
+                let images = document
+                    .pages()
+                    .iter()
+                    .map(|page| svg(page, &options))
+                    .collect::<Vec<_>>();
+                let images = images
+                    .into_iter()
+                    .map(|mut image| {
+                        // Typst 0.15 no longer emits the legacy `typst-doc`
+                        // class. Keep it for backwards-compatible styling in
+                        // mdBook themes and existing user CSS.
+                        if image.starts_with("<svg ") && !image.starts_with("<svg class=") {
+                            image = image.replacen("<svg ", r#"<svg class="typst-doc" "#, 1);
+                        }
+                        image
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
                 Ok(images)
             }
             Err(errors) => {
@@ -365,7 +374,8 @@ impl WrapSource<'_> {
         if let Ok(source) = self.compiler.get_source(id) {
             source.lines().clone()
         } else if let Ok(bytes) = self.compiler.get_file(id) {
-            Lines::try_from(&bytes).expect("not valid utf-8")
+            let text = std::str::from_utf8(bytes.as_slice()).expect("not valid utf-8");
+            Lines::new(text.to_owned())
         } else {
             self.source.lines().clone()
         }
@@ -398,10 +408,10 @@ impl World for WrapSource<'_> {
     }
 
     fn font(&self, index: usize) -> Option<Font> {
-        self.compiler.fonts.get(index)?.get()
+        self.compiler.fonts.font(index)
     }
 
-    fn today(&self, _offset: Option<i64>) -> Option<Datetime> {
+    fn today(&self, _offset: Option<Duration>) -> Option<Datetime> {
         Some(Datetime::Date(self.time.date()))
     }
 }
@@ -414,10 +424,11 @@ impl<'a> codespan_reporting::files::Files<'a> for WrapSource<'a> {
 
     fn name(&'a self, id: Self::FileId) -> Result<Self::Name, codespan_reporting::files::Error> {
         let vpath = id.vpath();
-        Ok(if let Some(package) = id.package() {
-            format!("{package}{}", vpath.as_rooted_path().display())
-        } else {
-            format!("{}", vpath.as_rootless_path().display())
+        Ok(match id.root() {
+            VirtualRoot::Package(package) => {
+                format!("{package}{}", vpath.get_with_slash())
+            }
+            VirtualRoot::Project => vpath.get_without_slash().to_owned(),
         })
     }
 
@@ -495,7 +506,7 @@ impl<'a> codespan_reporting::files::Files<'a> for WrapSource<'a> {
     }
 }
 
-fn label(world: &WrapSource, span: Span) -> Option<Label<FileId>> {
+fn label(world: &WrapSource, span: DiagSpan) -> Option<Label<FileId>> {
     Some(Label::primary(span.id()?, world.range(span)?))
 }
 
@@ -514,7 +525,7 @@ pub fn print_diagnostics(
             diagnostic
                 .hints
                 .iter()
-                .map(|s| (eco_format!("hint: {s}")).into())
+                .map(|s| eco_format!("hint: {}", s.v).into())
                 .collect(),
         )
         .with_labels(label(world, diagnostic.span).into_iter().collect());

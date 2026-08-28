@@ -215,6 +215,12 @@ $$
 
 Currently, only following configurations are supported. Here we use an example to show how to set them:
 
+Font files configured directly are parsed when the preprocessor starts. Font
+directories and platform system-font directories are scanned for metadata at
+startup, while the font data itself is loaded only when Typst selects that
+font. Fonts are considered in this order: configured paths, system fonts (if
+enabled), and embedded fallback fonts (when the binary includes them).
+
 ````toml
 [preprocessor.typst-math]
 
