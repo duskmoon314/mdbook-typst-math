@@ -39,7 +39,7 @@ tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 typst = "0.14.2"
 typst-html = "0.14.2"
 typst-kit = { version = "0.14.2", default-features = false, features = ["fonts"] }
-typst-svg = "0.14.2"
+typst-svg = "0.15.0"
 
 [features]
 default = ["embed-fonts"]
