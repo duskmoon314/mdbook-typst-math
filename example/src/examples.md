@@ -22,6 +22,20 @@ $$
 accent(f, "^")(omega) = integral_(-infinity)^infinity f(t) e^(-i omega t) d t
 $$
 
+## Experimental MathML output
+
+Math can be emitted as browser-native MathML by enabling the experimental
+option in `book.toml`:
+
+```toml
+[preprocessor.typst-math]
+html_math = true
+```
+
+This only changes inline and display math blocks. Fenced `typst,render` code
+blocks continue to use SVG. Typst's HTML exporter is still experimental, and
+support for advanced layout and browser styling may vary.
+
 ## Using Typst Packages
 
 You can use Typst packages by importing them in the `preamble` configuration.

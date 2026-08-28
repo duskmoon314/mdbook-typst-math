@@ -13,17 +13,20 @@ use codespan_reporting::{
 };
 use tracing::{error, warn};
 use typst::{
+    comemo::Track,
     diag::{
         eco_format, FileError, FileResult, PackageError, PackageResult, SourceDiagnostic, Warned,
     },
     foundations::{Bytes, Datetime, Duration},
+    model::LateLinkResolver,
     syntax::{
         package::PackageSpec, DiagSpan, FileId, Lines, RootedPath, Source, VirtualPath, VirtualRoot,
     },
     text::{Font, FontBook},
     utils::LazyHash,
-    Library, LibraryExt, World, WorldExt,
+    Feature, Library, LibraryExt, World, WorldExt,
 };
+use typst_html::{html_in_bundle, tag, HtmlDocument, HtmlElement, HtmlNode, HtmlOptions};
 use typst_kit::fonts::FontStore;
 use typst_layout::PagedDocument;
 use typst_svg::{svg, SvgOptions};
@@ -41,6 +44,14 @@ pub enum CompileError {
     /// occurred while holding a lock.
     #[allow(dead_code)]
     LockPoisoned,
+}
+
+/// HTML/MathML output for one math block.
+pub struct HtmlMath {
+    /// The serialized `<math>` element.
+    pub fragment: String,
+    /// The MathML stylesheet emitted by Typst, if any.
+    pub style: Option<String>,
 }
 
 impl fmt::Display for CompileError {
@@ -107,6 +118,12 @@ impl Compiler {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Enables Typst's experimental HTML target for MathML rendering.
+    pub fn enable_html(&mut self) {
+        let features = [Feature::Html].into_iter().collect();
+        self.library = LazyHash::new(Library::builder().with_features(features).build());
     }
 
     /// Wraps a source string into a [`WrapSource`] that implements [`World`].
@@ -349,6 +366,115 @@ impl Compiler {
             }
         }
     }
+
+    /// Renders a math block to an HTML/MathML fragment.
+    ///
+    /// Typst's HTML encoder produces a complete document. We use its public
+    /// DOM and bundle encoder to serialize only the generated `<math>` node,
+    /// preserving MathML and any inline SVG fallback nodes without reparsing
+    /// the encoded HTML string.
+    pub fn render_html_math(
+        &self,
+        source: impl Into<String>,
+        filename: Option<&str>,
+        markdown_line: usize,
+        preamble_lines: usize,
+    ) -> Result<HtmlMath, CompileError> {
+        let source = source.into();
+        let world = self.wrap_source(source, filename, markdown_line, preamble_lines);
+        let Warned { output, warnings } = typst::compile::<HtmlDocument>(&world);
+
+        let document = match output {
+            Ok(document) => {
+                print_diagnostics(&world, &warnings, &[])?;
+                document
+            }
+            Err(errors) => {
+                print_diagnostics(&world, &warnings, &errors)?;
+                return Err(CompileError::Compilation(
+                    "typst HTML compilation failed".to_string(),
+                ));
+            }
+        };
+
+        let body = document
+            .root()
+            .children
+            .iter()
+            .find_map(|node| match node {
+                HtmlNode::Element(element) if element.tag == tag::body => Some(element),
+                _ => None,
+            })
+            .ok_or_else(|| {
+                CompileError::Compilation(
+                    "typst HTML output did not contain a body element".to_string(),
+                )
+            })?;
+
+        // A standalone inline equation is grouped into a paragraph by the
+        // HTML exporter, while a display equation is emitted directly. Walk
+        // the tree recursively so user show rules that add an extra wrapper
+        // do not make the fragment impossible to extract.
+        let math = find_math_element(body);
+
+        let math = math.ok_or_else(|| {
+            CompileError::Compilation(
+                "typst HTML output did not contain a math element".to_string(),
+            )
+        })?;
+
+        let fragment = encode_html_element(&document, math)?;
+
+        let style = document
+            .root()
+            .children
+            .iter()
+            .find_map(|node| match node {
+                HtmlNode::Element(element) if element.tag == tag::head => {
+                    element.children.iter().find_map(|child| match child {
+                        HtmlNode::Element(style) if style.tag == tag::style => Some(style),
+                        _ => None,
+                    })
+                }
+                _ => None,
+            })
+            .map(|style| encode_html_element(&document, style))
+            .transpose()?;
+
+        Ok(HtmlMath { fragment, style })
+    }
+}
+
+/// Finds the first MathML `<math>` element in an HTML subtree.
+fn find_math_element(element: &HtmlElement) -> Option<&HtmlElement> {
+    for node in &element.children {
+        match node {
+            HtmlNode::Element(child) if child.tag == tag::mathml::math => return Some(child),
+            HtmlNode::Element(child) => {
+                if let Some(math) = find_math_element(child) {
+                    return Some(math);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Serializes one Typst HTML DOM element without reparsing the full document.
+fn encode_html_element(
+    document: &HtmlDocument,
+    element: &HtmlElement,
+) -> Result<String, CompileError> {
+    let resolver = LateLinkResolver::new(None, document.introspector().as_ref());
+    let encoded =
+        html_in_bundle(element, &HtmlOptions::default(), resolver.track()).map_err(|errors| {
+            CompileError::Compilation(format!("failed to encode HTML: {errors:?}"))
+        })?;
+    Ok(encoded
+        .strip_prefix("<!DOCTYPE html>")
+        .unwrap_or(&encoded)
+        .to_string())
 }
 
 /// A wrapper that provides a complete Typst [`World`] for compilation.
@@ -539,4 +665,71 @@ pub fn print_diagnostics(
     }
 
     Ok(())
+}
+
+#[cfg(all(test, feature = "embed-fonts"))]
+mod tests {
+    use super::*;
+
+    fn compiler_with_embedded_fonts() -> Compiler {
+        let mut compiler = Compiler::new();
+        let mut fonts = FontStore::new();
+
+        fonts.extend(typst_kit::fonts::embedded());
+
+        compiler.book = fonts.book().clone();
+        compiler.fonts = fonts;
+        compiler
+    }
+
+    #[test]
+    fn html_math_renders_mathml() {
+        let mut compiler = compiler_with_embedded_fonts();
+        compiler.enable_html();
+
+        let output = compiler
+            .render_html_math("$ a_1 + frac(1, 2) $", Some("math.md"), 1, 0)
+            .expect("HTML math should compile");
+
+        assert!(output.fragment.starts_with("<math"));
+        assert!(output.fragment.contains("<msub>"));
+        assert!(output.fragment.contains("<mfrac>"));
+        assert!(output.style.is_some());
+    }
+
+    #[test]
+    fn html_math_marks_display_equations() {
+        let mut compiler = compiler_with_embedded_fonts();
+        compiler.enable_html();
+
+        let output = compiler
+            .render_html_math("$ x^2 $", Some("math.md"), 1, 0)
+            .expect("HTML math should compile");
+
+        assert!(
+            output.fragment.starts_with("<math display=\"block\">")
+                || output.fragment.starts_with("<math display=\"block\" ")
+        );
+        assert!(output.fragment.contains("<msup>"));
+    }
+
+    #[test]
+    fn svg_render_keeps_legacy_document_class() {
+        let compiler = compiler_with_embedded_fonts();
+        let output = compiler
+            .render("$ x^2 $", Some("math.md"), 1, 0)
+            .expect("SVG math should compile");
+
+        assert!(output.starts_with("<svg class=\"typst-doc\""));
+    }
+
+    #[test]
+    fn html_math_reports_compile_errors() {
+        let mut compiler = compiler_with_embedded_fonts();
+        compiler.enable_html();
+
+        let error = compiler.render_html_math("#let =", Some("math.md"), 1, 0);
+
+        assert!(matches!(error, Err(CompileError::Compilation(_))));
+    }
 }

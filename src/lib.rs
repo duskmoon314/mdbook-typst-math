@@ -25,6 +25,8 @@
 //! - `code_tag`: Language tag for code blocks to render as Typst (default: `typst,render`)
 //! - `enable_math`: Enable rendering of math blocks (default: `true`)
 //! - `enable_code`: Enable rendering of Typst code blocks (default: `true`)
+//! - `html_math`: Emit math as MathML using Typst's experimental HTML target
+//!   (default: `false`)
 
 use std::path::PathBuf;
 
@@ -70,6 +72,8 @@ pub struct TypstProcessorOptions {
     pub enable_math: bool,
     /// Enable rendering of Typst code blocks.
     pub enable_code: bool,
+    /// Render math blocks as HTML/MathML using Typst's experimental HTML target.
+    pub html_math: bool,
 }
 
 /// Color mode for SVG output.
@@ -131,6 +135,10 @@ struct TypstMathConfig {
     /// Whether to search system font directories. Defaults to true.
     include_system_fonts: Option<bool>,
 
+    /// Whether to render math blocks as HTML/MathML using Typst's experimental
+    /// HTML target. Defaults to false.
+    html_math: Option<bool>,
+
     /// Cache directory for downloaded packages
     cache: Option<String>,
     #[serde(default)]
@@ -179,6 +187,10 @@ impl Preprocessor for TypstProcessor {
             .flatten()
             .unwrap_or_default();
         let mut compiler = Compiler::new();
+        let html_math = config.html_math.unwrap_or(false);
+        if html_math {
+            compiler.enable_html();
+        }
 
         // Set options from config
         let opts = TypstProcessorOptions {
@@ -193,6 +205,7 @@ impl Preprocessor for TypstProcessor {
                 .unwrap_or_else(|| String::from("typst,render")),
             enable_math: config.enable_math.unwrap_or(true),
             enable_code: config.enable_code.unwrap_or(true),
+            html_math,
         };
 
         let mut font_store = FontStore::new();
@@ -305,6 +318,7 @@ impl TypstProcessor {
                         format!("{}\n${math_content}$", preamble),
                         true,
                         preamble.lines().count(), // preamble line count
+                        true,                     // Math blocks can use the HTML/MathML target.
                     ));
                 }
                 Event::DisplayMath(math_content) if opts.enable_math => {
@@ -315,6 +329,7 @@ impl TypstProcessor {
                         format!("{}\n$ {math_content} $", preamble),
                         false,
                         preamble.lines().count(), // preamble line count
+                        true,                     // Math blocks can use the HTML/MathML target.
                     ));
                 }
                 Event::Start(Tag::CodeBlock(CodeBlockKind::Fenced(lang))) if opts.enable_code => {
@@ -337,6 +352,7 @@ impl TypstProcessor {
                             format!("{}\n{}", preamble, code_block_content.trim()),
                             false, // Display mode
                             preamble.lines().count(),
+                            false, // Typst code blocks continue to use SVG.
                         ));
                     }
                     in_typst_code_block = false;
@@ -347,43 +363,144 @@ impl TypstProcessor {
         }
 
         let mut content = chapter.content.to_string();
+        let mut html_style = None;
 
-        for (span, block, inline, preamble_lines) in typst_blocks.iter().rev() {
+        for (span, block, inline, preamble_lines, is_math) in typst_blocks.iter().rev() {
             let pre_content = &content[0..span.start];
             let post_content = &content[span.end..];
 
             // Calculate the line number in the original markdown
             let markdown_line = chapter.content[..span.start].lines().count() + 1;
 
-            let mut svg = compiler
-                .render(
-                    block.clone(),
-                    Some(&filename),
-                    markdown_line,
-                    *preamble_lines,
-                )
-                .map_err(|e: CompileError| {
-                    anyhow!("Failed to render math in chapter '{}': {}", filename, e)
-                })?;
+            let rendered = if opts.html_math && *is_math {
+                let html = compiler
+                    .render_html_math(
+                        block.clone(),
+                        Some(&filename),
+                        markdown_line,
+                        *preamble_lines,
+                    )
+                    .map_err(|e: CompileError| {
+                        anyhow!("Failed to render math in chapter '{}': {}", filename, e)
+                    })?;
+                if html_style.is_none() {
+                    html_style = html.style;
+                }
+                html.fragment
+            } else {
+                let mut svg = compiler
+                    .render(
+                        block.clone(),
+                        Some(&filename),
+                        markdown_line,
+                        *preamble_lines,
+                    )
+                    .map_err(|e: CompileError| {
+                        anyhow!("Failed to render math in chapter '{}': {}", filename, e)
+                    })?;
 
-            // Apply color mode transformation
-            if opts.color_mode == ColorMode::Auto {
-                svg = svg.replace(r##"fill="#000000""##, r#"fill="currentColor""#);
-                svg = svg.replace(r##"stroke="#000000""##, r#"stroke="currentColor""#);
-            }
+                // Apply color mode transformation
+                if opts.color_mode == ColorMode::Auto {
+                    svg = svg.replace(r##"fill="#000000""##, r#"fill="currentColor""#);
+                    svg = svg.replace(r##"stroke="#000000""##, r#"stroke="currentColor""#);
+                }
+                svg
+            };
 
             content = match inline {
                 true => format!(
                     "{}<span class=\"typst-inline\">{}</span>{}",
-                    pre_content, svg, post_content
+                    pre_content, rendered, post_content
                 ),
                 false => format!(
                     "{}<div class=\"typst-display\">{}</div>{}",
-                    pre_content, svg, post_content
+                    pre_content, rendered, post_content
                 ),
             };
         }
 
+        if let Some(style) = html_style {
+            content = format!("{style}\n{content}");
+        }
+
         Ok(content)
+    }
+}
+
+#[cfg(all(test, feature = "embed-fonts"))]
+mod tests {
+    use super::*;
+    use mdbook_preprocessor::book::Chapter;
+    use std::str::FromStr;
+
+    fn compiler_with_embedded_fonts() -> Compiler {
+        let mut compiler = Compiler::new();
+        let mut fonts = FontStore::new();
+
+        fonts.extend(typst_kit::fonts::embedded());
+
+        compiler.book = fonts.book().clone();
+        compiler.fonts = fonts;
+        compiler
+    }
+
+    fn options(html_math: bool) -> TypstProcessorOptions {
+        TypstProcessorOptions {
+            preamble: String::new(),
+            inline_preamble: None,
+            display_preamble: None,
+            color_mode: ColorMode::Auto,
+            code_tag: "typst,render".to_string(),
+            enable_math: true,
+            enable_code: true,
+            html_math,
+        }
+    }
+
+    #[test]
+    fn html_math_only_changes_math_blocks() {
+        let mut compiler = compiler_with_embedded_fonts();
+        compiler.enable_html();
+        let chapter = Chapter::new(
+            "Test",
+            "Inline $x^2$\n\n```typst,render\n#set text(fill: red)\nHello\n```".to_string(),
+            "test.md",
+            vec![],
+        );
+
+        let output = TypstProcessor
+            .convert_typst(&chapter, &compiler, &options(true))
+            .expect("chapter should compile");
+
+        assert!(output.contains("<span class=\"typst-inline\"><math>"));
+        assert!(output.contains("<div class=\"typst-display\"><svg class=\"typst-doc\""));
+        assert_eq!(output.matches("<style>").count(), 1);
+    }
+
+    #[test]
+    fn html_math_disabled_keeps_svg_output() {
+        let compiler = compiler_with_embedded_fonts();
+        let chapter = Chapter::new("Test", "$x^2$".to_string(), "test.md", vec![]);
+
+        let output = TypstProcessor
+            .convert_typst(&chapter, &compiler, &options(false))
+            .expect("chapter should compile");
+
+        assert!(!output.contains("<math"));
+        assert!(output.contains("<svg class=\"typst-doc\""));
+    }
+
+    #[test]
+    fn html_math_config_accepts_snake_case() {
+        let config = mdbook_preprocessor::config::Config::from_str(
+            "[book]\ntitle = \"test\"\n\n[preprocessor.typst-math]\nhtml_math = true\n",
+        )
+        .expect("configuration should parse");
+        let config: TypstMathConfig = config
+            .get("preprocessor.typst-math")
+            .expect("preprocessor config should deserialize")
+            .expect("preprocessor config should be present");
+
+        assert_eq!(config.html_math, Some(true));
     }
 }
