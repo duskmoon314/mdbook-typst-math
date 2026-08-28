@@ -69,7 +69,7 @@ jobs:
           path: mdbook-typst-math-${{ matrix.target }}${{ matrix.suffix }}
       - name: Upload Example Book
         if: ${{ github.event_name == 'push' && matrix.os == 'ubuntu-latest' && matrix.target == 'x86_64-unknown-linux-gnu' }}
-        uses: actions/upload-pages-artifact@v4
+        uses: actions/upload-pages-artifact@v5
         with:
           path: example/book
 
