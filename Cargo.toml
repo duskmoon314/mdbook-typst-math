@@ -1,6 +1,6 @@
 [package]
 name = "mdbook-typst-math"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 authors = [
     "duskmoon (Campbell He) <kp.campbell.he@duskmoon314.com>",
@@ -38,7 +38,9 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 typst = "0.15.1"
 typst-html = "0.15.1"
-typst-kit = { version = "0.15.1", default-features = false, features = ["scan-fonts"] }
+typst-kit = { version = "0.15.1", default-features = false, features = [
+    "scan-fonts",
+] }
 typst-layout = "0.15.1"
 typst-svg = "0.15.1"
 
